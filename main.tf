@@ -36,3 +36,13 @@ resource "aws_lambda_function" "hello_world" {
   runtime          = "nodejs18.x" # Adjust runtime as necessary
   source_code_hash = filebase64sha256("hello_world.zip")
 }
+
+resource "aws_lambda_permission" "apigateway_invoke" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.hello_world.arn # Or use var.lambda_function_name if ARN is not accessible
+  principal     = "apigateway.amazonaws.com"
+
+  # Specify the API Gateway resource invoking the Lambda
+  source_arn = "${aws_api_gateway_rest_api.hello_api.execution_arn}/*"
+}
