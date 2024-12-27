@@ -143,3 +143,20 @@ resource "aws_lambda_permission" "hello_lambda" {
 
   source_arn = "${aws_api_gateway_rest_api.hello_api.execution_arn}/*/*"
 }
+
+resource "aws_api_gateway_domain_name" "custom_domain" {
+  domain_name = "api.technomantics.com"
+  regional_certificate_arn = aws_acm_certificate.api_cert.arn
+  endpoint_configuration {
+    types = ["REGIONAL"] # Use "EDGE" for global deployment via CloudFront
+  }
+
+  depends_on = [
+    aws_acm_certificate.api_cert,
+  ]
+}
+
+resource "aws_api_gateway_base_path_mapping" "base_path" {
+  domain_name = aws_api_gateway_domain_name.custom_domain.domain_name
+  api_id = aws_api_gateway_rest_api.hello_api.id
+}

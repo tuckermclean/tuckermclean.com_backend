@@ -27,3 +27,18 @@ resource "aws_acm_certificate" "website_cert" {
     Name = "technomantics.com certificate"
   }
 }
+
+resource "aws_acm_certificate" "api_cert" {
+  provider = aws.us_west_2
+
+  domain_name       = "api.technomantics.com"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "api.technomantics.com certificate"
+  }
+}
