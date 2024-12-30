@@ -3,3 +3,4 @@
 *.tfstate.*backup
 *.tfstate.backup
 hello_world.zip
+node_modules/
