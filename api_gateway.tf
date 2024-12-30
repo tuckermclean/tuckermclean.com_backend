@@ -1,17 +1,17 @@
-resource "aws_api_gateway_rest_api" "hello_api" {
-  name = "HelloWorldAPI"
+resource "aws_api_gateway_rest_api" "api" {
+  name = "API"
 }
 
 # Define the /hello resource
 resource "aws_api_gateway_resource" "hello" {
-  rest_api_id = aws_api_gateway_rest_api.hello_api.id
-  parent_id   = aws_api_gateway_rest_api.hello_api.root_resource_id
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_rest_api.api.root_resource_id
   path_part   = "hello"
 }
 
 # POST method for /hello
 resource "aws_api_gateway_method" "post_hello" {
-  rest_api_id   = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.hello.id
   http_method   = "POST"
   authorization = "NONE"
@@ -19,7 +19,7 @@ resource "aws_api_gateway_method" "post_hello" {
 
 # Integration for the POST method with Lambda
 resource "aws_api_gateway_integration" "post_hello_integration" {
-  rest_api_id = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_method.post_hello.resource_id
   http_method = aws_api_gateway_method.post_hello.http_method
   integration_http_method = "POST"
@@ -32,7 +32,7 @@ resource "aws_api_gateway_integration" "post_hello_integration" {
 
 # GET method for /hello
 resource "aws_api_gateway_method" "get_hello" {
-  rest_api_id   = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.hello.id
   http_method   = "GET"
   authorization = "NONE"
@@ -40,7 +40,7 @@ resource "aws_api_gateway_method" "get_hello" {
 
 # Integration for the GET method with Lambda
 resource "aws_api_gateway_integration" "get_hello_integration" {
-  rest_api_id = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_method.get_hello.resource_id
   http_method = aws_api_gateway_method.get_hello.http_method
   integration_http_method = "POST"
@@ -53,7 +53,7 @@ resource "aws_api_gateway_integration" "get_hello_integration" {
 
 # OPTIONS method for /hello
 resource "aws_api_gateway_method" "options_hello" {
-  rest_api_id   = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.hello.id
   http_method   = "OPTIONS"
   authorization = "NONE"
@@ -61,7 +61,7 @@ resource "aws_api_gateway_method" "options_hello" {
 
 # Integration for the OPTIONS method with Lambda
 resource "aws_api_gateway_integration" "options_hello_integration" {
-  rest_api_id = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_resource.hello.id
   http_method = aws_api_gateway_method.options_hello.http_method
   integration_http_method = "OPTIONS"
@@ -72,7 +72,7 @@ resource "aws_api_gateway_integration" "options_hello_integration" {
 }
 
 resource "aws_api_gateway_integration_response" "options_hello_proxy" {
-  rest_api_id = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_integration.options_hello_integration.resource_id
   http_method = aws_api_gateway_method.options_hello.http_method
   status_code = "200"
@@ -86,7 +86,7 @@ resource "aws_api_gateway_integration_response" "options_hello_proxy" {
 
 # Method response for OPTIONS
 resource "aws_api_gateway_method_response" "options_hello_proxy" {
-  rest_api_id = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_resource.hello.id
   http_method = aws_api_gateway_method.options_hello.http_method
   status_code = "200"
@@ -104,7 +104,7 @@ resource "aws_api_gateway_method_response" "options_hello_proxy" {
 
 # Deploy the API Gateway
 resource "aws_api_gateway_deployment" "deployment" {
-  rest_api_id = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id = aws_api_gateway_rest_api.api.id
 
   depends_on = [
     aws_api_gateway_integration.post_hello_integration,
@@ -116,7 +116,7 @@ resource "aws_api_gateway_deployment" "deployment" {
 # Create a stage for the API Gateway
 resource "aws_api_gateway_stage" "api_stage" {
   stage_name    = "v1"
-  rest_api_id   = aws_api_gateway_rest_api.hello_api.id
+  rest_api_id   = aws_api_gateway_rest_api.api.id
   deployment_id = aws_api_gateway_deployment.deployment.id
 }
 
@@ -141,7 +141,7 @@ resource "aws_lambda_permission" "hello_lambda" {
   function_name = aws_lambda_function.hello_lambda.function_name
   principal = "apigateway.amazonaws.com"
 
-  source_arn = "${aws_api_gateway_rest_api.hello_api.execution_arn}/*/*"
+  source_arn = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
 }
 
 resource "aws_api_gateway_domain_name" "custom_domain" {
@@ -158,5 +158,5 @@ resource "aws_api_gateway_domain_name" "custom_domain" {
 
 resource "aws_api_gateway_base_path_mapping" "base_path" {
   domain_name = aws_api_gateway_domain_name.custom_domain.domain_name
-  api_id = aws_api_gateway_rest_api.hello_api.id
+  api_id = aws_api_gateway_rest_api.api.id
 }
