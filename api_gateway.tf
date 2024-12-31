@@ -56,60 +56,9 @@ resource "aws_api_gateway_integration" "get_hello_integration" {
   }
 }
 
-# OPTIONS method for /hello
-resource "aws_api_gateway_method" "options_hello" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.hello.id
-  http_method   = "OPTIONS"
-  authorization = "NONE"
-}
-
-# Integration for the OPTIONS method with Lambda
-resource "aws_api_gateway_integration" "options_hello_integration" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.hello.id
-  http_method = aws_api_gateway_method.options_hello.http_method
-  integration_http_method = "OPTIONS"
-  type        = "MOCK"
-  request_templates = {
-    "application/json" = jsonencode({ statusCode = 200 })
-  }
-}
-
-resource "aws_api_gateway_integration_response" "options_hello_proxy" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_integration.options_hello_integration.resource_id
-  http_method = aws_api_gateway_method.options_hello.http_method
-  status_code = "200"
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
-    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
-  }
-}
-
-# Method response for OPTIONS
-resource "aws_api_gateway_method_response" "options_hello_proxy" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.hello.id
-  http_method = aws_api_gateway_method.options_hello.http_method
-  status_code = "200"
-
-  response_models = {
-    "application/json" = "Empty"
-  }
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = true
-    "method.response.header.Access-Control-Allow-Methods" = true
-    "method.response.header.Access-Control-Allow-Origin"  = true
-  }
-}
-
 ####
 # Push notification key
-# Methods: GET
+# Methods: GET, POST
 ####
 
 # Define the /push-key resource
@@ -127,11 +76,32 @@ resource "aws_api_gateway_method" "get_push_key" {
   authorization = "NONE"
 }
 
+# POST method for /push-key
+resource "aws_api_gateway_method" "post_push_key" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.push_key.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
 # Integration for the GET method with Lambda
 resource "aws_api_gateway_integration" "get_push_key_integration" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_resource.push_key.id
   http_method = aws_api_gateway_method.get_push_key.http_method
+  integration_http_method = "POST"
+  type = "AWS_PROXY"
+  uri = aws_lambda_function.push_key.invoke_arn
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+# Integration for the POST method with Lambda
+resource "aws_api_gateway_integration" "post_push_key_integration" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.push_key.id
+  http_method = aws_api_gateway_method.post_push_key.http_method
   integration_http_method = "POST"
   type = "AWS_PROXY"
   uri = aws_lambda_function.push_key.invoke_arn
@@ -151,8 +121,8 @@ resource "aws_api_gateway_deployment" "deployment" {
   depends_on = [
     aws_api_gateway_integration.post_hello_integration,
     aws_api_gateway_integration.get_hello_integration,
-    aws_api_gateway_integration.options_hello_integration,
     aws_api_gateway_integration.get_push_key_integration,
+    aws_api_gateway_integration.post_push_key_integration
   ]
 }
 

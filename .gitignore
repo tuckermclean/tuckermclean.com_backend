@@ -2,5 +2,5 @@
 .terraform.*
 *.tfstate.*backup
 *.tfstate.backup
-hello_world.zip
+*.zip
 node_modules/

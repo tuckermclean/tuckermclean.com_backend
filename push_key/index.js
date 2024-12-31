@@ -38,21 +38,50 @@ async function storeSecret(secretName, secretValue) {
     }
 }
 
+// Verify that the public and private keys are set and valid
+async function verifyKeys(tries = 2) {
+    if (tries <= 0) {
+        return false;
+    }
+    const publicKey = await getSecret(VAPID_PUBLIC_SECRET);
+    const privateKey = await getSecret(VAPID_PRIVATE_SECRET);
+
+    if (!publicKey || !privateKey) {
+        await generateKeys();
+        return await verifyKeys(tries - 1);
+    }
+
+    try {
+        webpush.setVapidDetails("mailto:doink@doink.fake", publicKey, privateKey);
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+async function generateKeys() {
+    const keys = webpush.generateVAPIDKeys();
+    await storeSecret(VAPID_PUBLIC_SECRET, keys.publicKey);
+    await storeSecret(VAPID_PRIVATE_SECRET, keys.privateKey);
+}
+
 exports.handler = async (event) => {
     try {
-        // Check if public key already exists
-        let publicKey = await getSecret(VAPID_PUBLIC_SECRET);
-
-        if (!publicKey) {
-            // Generate new VAPID keys if not found
-            const keys = webpush.generateVAPIDKeys();
-            publicKey = keys.publicKey;
-            const privateKey = keys.privateKey;
-
-            // Store the keys in Secrets Manager
-            await storeSecret(VAPID_PUBLIC_SECRET, publicKey);
-            await storeSecret(VAPID_PRIVATE_SECRET, privateKey);
+        // if method is POST, generate new keys
+        if (event.httpMethod === "POST") {
+            await generateKeys();
         }
+
+        // Verify that the keys are set and valid
+        if (!await verifyKeys()) {
+            await generateKeys();
+            if (!await verifyKeys()) {
+                throw new Error("Failed to generate valid VAPID keys");
+            }
+        }
+
+        // Get the public key
+        let publicKey = await getSecret(VAPID_PUBLIC_SECRET);
 
         // Return the public key
         return {

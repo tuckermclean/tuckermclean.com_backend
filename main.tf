@@ -1,6 +1,9 @@
 # Terraform Script for Infrastructure-as-Code Setup
 # Components: S3 bucket, HTTPS CloudFront, Route53, API Gateway, and Hello World Lambda
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 provider "aws" {
   alias   = "us_west_2"
   region  = "us-west-2" # Adjust region as necessary
