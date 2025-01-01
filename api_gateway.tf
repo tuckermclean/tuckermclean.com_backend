@@ -69,6 +69,9 @@ resource "aws_api_gateway_deployment" "deployment" {
     aws_api_gateway_integration.get_hello_integration,
     aws_api_gateway_integration.get_push_key,
     aws_api_gateway_integration.post_push_key,
+    aws_api_gateway_integration.get_conversation,
+    aws_api_gateway_integration.post_conversation,
+    aws_api_gateway_integration.options_conversation,
   ]
 }
 

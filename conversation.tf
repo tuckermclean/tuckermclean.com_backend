@@ -3,33 +3,47 @@
 # Methods: GET, POST
 ####
 
-# Define the /push-key resource
+# Define the /conversation resource
 resource "aws_api_gateway_resource" "conversation" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   parent_id   = aws_api_gateway_rest_api.api.root_resource_id
   path_part   = "conversation"
 }
 
-# GET method for /push-key
+resource "aws_api_gateway_resource" "conversation_uuid" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_resource.conversation.id
+  path_part   = "{uuid}"
+}
+
+# GET method for /conversation
 resource "aws_api_gateway_method" "get_conversation" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.conversation.id
+  resource_id   = aws_api_gateway_resource.conversation_uuid.id
   http_method   = "GET"
   authorization = "NONE"
 }
 
-# POST method for /push-key
+# POST method for /conversation
 resource "aws_api_gateway_method" "post_conversation" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.conversation.id
+  resource_id   = aws_api_gateway_resource.conversation_uuid.id
   http_method   = "POST"
+  authorization = "NONE"
+}
+
+# OPTIONS method for /conversation
+resource "aws_api_gateway_method" "options_conversation" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.conversation_uuid.id
+  http_method   = "OPTIONS"
   authorization = "NONE"
 }
 
 # Integration for the GET method with Lambda
 resource "aws_api_gateway_integration" "get_conversation" {
   rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.conversation.id
+  resource_id = aws_api_gateway_resource.conversation_uuid.id
   http_method = aws_api_gateway_method.get_conversation.http_method
   integration_http_method = "POST"
   type = "AWS_PROXY"
@@ -42,8 +56,21 @@ resource "aws_api_gateway_integration" "get_conversation" {
 # Integration for the POST method with Lambda
 resource "aws_api_gateway_integration" "post_conversation" {
   rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.conversation.id
+  resource_id = aws_api_gateway_resource.conversation_uuid.id
   http_method = aws_api_gateway_method.post_conversation.http_method
+  integration_http_method = "POST"
+  type = "AWS_PROXY"
+  uri = aws_lambda_function.conversation.invoke_arn
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+# Integration for the OPTIONS method with Lambda
+resource "aws_api_gateway_integration" "options_conversation" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.conversation_uuid.id
+  http_method = aws_api_gateway_method.options_conversation.http_method
   integration_http_method = "POST"
   type = "AWS_PROXY"
   uri = aws_lambda_function.conversation.invoke_arn
@@ -111,20 +138,20 @@ resource "aws_iam_role_policy_attachment" "conversation_exec" {
 
 resource "aws_iam_policy" "conversation" {
   name        = "conversation"
-  description = "Policy to allow Lambda to access Secrets Manager"
+  description = "Policy to allow Lambda to access DynamoDB"
   policy      = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
         Action: [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:CreateSecret",
-          "secretsmanager:PutSecretValue"
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:Query",
         ],
         Effect: "Allow",
         Resource: [
-          "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:VAPID_PUBLIC_KEY*",
-          "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:VAPID_PRIVATE_KEY*"
+            "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/Messages",
         ]
       }
     ]
@@ -135,3 +162,28 @@ resource "aws_iam_role_policy_attachment" "conversation" {
   role       = aws_iam_role.conversation.name
   policy_arn = aws_iam_policy.conversation.arn
 }
+
+####
+# DynamoDB table for messages
+#
+# Table name: Messages
+# conversation_uuid,	    Partition Key, UUID for the conversation
+# timestamp,	            Sort Key, ISO timestamp for message ordering
+####
+
+resource "aws_dynamodb_table" "messages" {
+  name           = "Messages"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "conversation_uuid"
+  range_key      = "timestamp"
+
+  attribute {
+    name = "conversation_uuid"
+    type = "S"
+  }
+
+  attribute {
+    name = "timestamp"
+    type = "S"
+  }
+} 
