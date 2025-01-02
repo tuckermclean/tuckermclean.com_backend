@@ -7,6 +7,9 @@ const dynamoDb = new AWS.DynamoDB.DocumentClient();
 
 const TABLE_NAME = 'Messages';
 const CONVERSATION_TABLE = 'Conversations';
+const ADMIN_TOKENS_TABLE = 'AdminTokens';
+
+let authenticated_user_info = undefined; // Until admin user logs in
 
 // Helper function for creating a bearer token
 function createBearerToken() {
@@ -23,14 +26,30 @@ function generateVAPIDKeys() {
 }
 
 // Helper function for verifying the bearer token
-async function verifyBearerToken(conversationUuid, token) {
+async function verifyBearerToken(conversationUuid = null, token) {
     const params = {
         TableName: CONVERSATION_TABLE,
         Key: { conversation_uuid: conversationUuid },
     };
 
     const result = await dynamoDb.get(params).promise();
-    return result.Item?.bearer_token === token;
+    if (result.Item?.bearer_token === token) {
+        authenticated_user_info = undefined;
+        return true;
+    } else {
+        // Check if the token is in the admin keys table
+        const adminTokens = await dynamoDb.get({
+            TableName: ADMIN_TOKENS_TABLE,
+            Key: { bearer_token: token },
+        }).promise();
+        if (adminTokens.Item?.bearer_token === token) {
+            authenticated_user_info = adminTokens.Item?.name || "Admin";
+            return true;
+        } else {
+            authenticated_user_info = undefined;
+            return false;
+        }
+    }
 }
 
 // Standard response function
@@ -50,10 +69,6 @@ function response(statusCode, body, headers = {}) {
 exports.handler = async (event) => {
     const { httpMethod, pathParameters, headers, body, queryStringParameters } = event;
     const conversationUuid = pathParameters?.uuid;
-
-    if (!conversationUuid) {
-        return response(400, { error: 'Conversation UUID is required' });
-    }
 
     if (httpMethod === 'GET') {
         // Handle "new" conversation creation
@@ -86,6 +101,69 @@ exports.handler = async (event) => {
                 console.error('Error creating conversation:', error);
                 return response(500, { error: 'Could not create conversation' });
             }
+        } else if (conversationUuid === 'admin') {
+            // Authenticate admin user against a username and password stored in Secrets Manager
+            let secret;
+            try {
+                const secretsManager = new AWS.SecretsManager();
+                const data = await secretsManager.getSecretValue({ SecretId: "ADMIN_USER_PASS" }).promise();
+                secret = data.SecretString;
+            } catch (err) {
+                if (err.code === "ResourceNotFoundException") {
+                    // Secret doesn't exist, can't authenticate
+                    return response(401, { error: 'Invalid admin credentials' });
+                }
+                throw err;
+            }
+
+            const authString = Buffer.from(headers?.Authorization?.split('Basic ')[1], 'base64').toString();
+            // Split the auth string into username and password
+            const [username, password, name] = secret.split(':');
+            if (`${username}:${password}` !== authString) {
+                return response(401, { error: 'Invalid admin credentials' });
+            } else {
+                // Generate a bearer token for the admin user
+                const bearerToken = createBearerToken();
+                const newAdminToken = {
+                    bearer_token: bearerToken,
+                    name: name || "Admin",
+                };
+
+                try {
+                    await dynamoDb.put({
+                        TableName: ADMIN_TOKENS_TABLE,
+                        Item: newAdminToken,
+                    }).promise();
+
+                    return response(201, {
+                        message: 'Admin authenticated',
+                        name: name || "Admin",
+                        bearer_token: bearerToken,
+                    });
+                } catch (error) {
+                    console.error('Error creating admin token:', error);
+                    return response(500, { error: 'Could not authenticate admin', data: error });
+                }
+            }
+        } else if (!conversationUuid) {
+            // If authenticated user is an admin, return list of all conversations, otherwise return 400
+            if (typeof(authenticated_user_info) !== 'undefined') {
+                // Only return conversation_uuid and vapid_public_key
+                const params = {
+                    TableName: CONVERSATION_TABLE,
+                    ProjectionExpression: 'conversation_uuid, vapid_public_key',
+                };
+                try {
+                    const result = await dynamoDb.scan(params).promise();
+                    return response(200, result.Items);
+                } catch (error) {
+                    console.error('Error listing conversations:', error);
+                    return response(500, { error: 'Could not list conversations', data: error});
+                }
+            } else {
+                return response(400, { error: 'Conversation UUID is required' });
+            }
+
         } else {
             // Verify the bearer token for an existing conversation
             const token = headers?.Authorization?.split('Bearer ')[1];
@@ -142,7 +220,6 @@ exports.handler = async (event) => {
         }
 
         // Add a new message to the conversation
-        let authenticated_user_info = null; // FIXME: Add authentication logic
         let name, email, phone, message;
         try {
             ({ name, email, phone, message} = JSON.parse(body));
@@ -151,7 +228,7 @@ exports.handler = async (event) => {
             return response(400, { error: 'Message must be valid JSON' });
         }
 
-        if (!(message && ((name && (email || phone)) || authenticated_user_info))) {
+        if (!(message && ((name && (email || phone)) || typeof(authenticated_user_info) !== 'undefined'))) {
             return response(400, { error: 'Message, and contact info or authentication are required' });
         }
 
@@ -163,7 +240,7 @@ exports.handler = async (event) => {
             email,
             phone,
             message,
-            authenticated_user_info: authenticated_user_info || null,
+            authenticated_user_info: authenticated_user_info,
         };
 
         try {

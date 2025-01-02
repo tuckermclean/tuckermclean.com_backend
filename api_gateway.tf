@@ -72,6 +72,8 @@ resource "aws_api_gateway_deployment" "deployment" {
     aws_api_gateway_integration.get_conversation,
     aws_api_gateway_integration.post_conversation,
     aws_api_gateway_integration.options_conversation,
+    aws_api_gateway_integration.get_conversation_root,
+    aws_api_gateway_integration.options_conversation_root,
   ]
 }
 

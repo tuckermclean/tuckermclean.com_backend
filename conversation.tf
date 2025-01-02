@@ -16,6 +16,22 @@ resource "aws_api_gateway_resource" "conversation_uuid" {
   path_part   = "{uuid}"
 }
 
+# GET method for /conversation root
+resource "aws_api_gateway_method" "get_conversation_root" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.conversation.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+# OPTIONS method for /conversation root
+resource "aws_api_gateway_method" "options_conversation_root" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.conversation.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
 # GET method for /conversation
 resource "aws_api_gateway_method" "get_conversation" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
@@ -38,6 +54,32 @@ resource "aws_api_gateway_method" "options_conversation" {
   resource_id   = aws_api_gateway_resource.conversation_uuid.id
   http_method   = "OPTIONS"
   authorization = "NONE"
+}
+
+# Integration for the root GET method with Lambda
+resource "aws_api_gateway_integration" "get_conversation_root" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.conversation.id
+  http_method = aws_api_gateway_method.get_conversation_root.http_method
+  integration_http_method = "POST"
+  type = "AWS_PROXY"
+  uri = aws_lambda_function.conversation.invoke_arn
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+# Integration for the root OPTIONS method with Lambda
+resource "aws_api_gateway_integration" "options_conversation_root" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.conversation.id
+  http_method = aws_api_gateway_method.options_conversation_root.http_method
+  integration_http_method = "POST"
+  type = "AWS_PROXY"
+  uri = aws_lambda_function.conversation.invoke_arn
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
 }
 
 # Integration for the GET method with Lambda
@@ -148,11 +190,15 @@ resource "aws_iam_policy" "conversation" {
           "dynamodb:GetItem",
           "dynamodb:UpdateItem",
           "dynamodb:Query",
+          "dynamodb:Scan",
+          "secretsmanager:GetSecretValue",
         ],
         Effect: "Allow",
         Resource: [
             "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/Messages",
             "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/Conversations",
+            "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/AdminTokens",
+            "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:ADMIN_USER_PASS*"
         ]
       }
     ]
@@ -203,6 +249,24 @@ resource "aws_dynamodb_table" "conversations" {
 
   attribute {
     name = "conversation_uuid"
+    type = "S"
+  }
+}
+
+####
+# DynamoDB table for admin bearer tokens
+#
+# Table name: AdminTokens
+# token,	                Partition Key, Bearer token for admin access
+####
+
+resource "aws_dynamodb_table" "admin_tokens" {
+  name           = "AdminTokens"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "bearer_token"
+
+  attribute {
+    name = "bearer_token"
     type = "S"
   }
 }
