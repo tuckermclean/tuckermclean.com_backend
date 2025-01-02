@@ -10,7 +10,7 @@ const CONVERSATION_TABLE = 'Conversations';
 
 // Helper function for creating a bearer token
 function createBearerToken() {
-    return crypto.randomBytes(64).toString('hex');
+    return crypto.randomBytes(64).toString('base64');
 }
 
 // Helper function for VAPID keys
