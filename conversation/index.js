@@ -1,21 +1,39 @@
 const AWS = require('aws-sdk');
-const { v4: uuidv4 } = require('uuid'); // For generating message IDs
+const webPush = require('web-push'); // For generating VAPID keys
+const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
+
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 
 const TABLE_NAME = 'Messages';
-const credential = "user:pass"; // FIXME: Will not be used in production
+const CONVERSATION_TABLE = 'Conversations';
 
-function verifyAuth(headers) {
-    const auth = headers?.Authorization;
-    if (!auth) {
-        return false;
-    }
-
-    const encoded = auth.split(' ')[1];
-    const decoded = Buffer.from(encoded, 'base64').toString();
-    return decoded === credential;
+// Helper function for creating a bearer token
+function createBearerToken() {
+    return crypto.randomBytes(64).toString('hex');
 }
 
+// Helper function for VAPID keys
+function generateVAPIDKeys() {
+    const keys = webPush.generateVAPIDKeys();
+    return {
+        publicKey: keys.publicKey,
+        privateKey: keys.privateKey,
+    };
+}
+
+// Helper function for verifying the bearer token
+async function verifyBearerToken(conversationUuid, token) {
+    const params = {
+        TableName: CONVERSATION_TABLE,
+        Key: { conversation_uuid: conversationUuid },
+    };
+
+    const result = await dynamoDb.get(params).promise();
+    return result.Item?.bearer_token === token;
+}
+
+// Standard response function
 function response(statusCode, body, headers = {}) {
     headers = {
         ...headers,
@@ -24,27 +42,59 @@ function response(statusCode, body, headers = {}) {
     };
     return {
         statusCode,
-        headers: headers,
+        headers,
         body: JSON.stringify(body),
     };
 }
 
 exports.handler = async (event) => {
-    const { httpMethod, pathParameters, headers, body } = event;
+    const { httpMethod, pathParameters, headers, body, queryStringParameters } = event;
     const conversationUuid = pathParameters?.uuid;
 
     if (!conversationUuid) {
         return response(400, { error: 'Conversation UUID is required' });
     }
 
-    if (headers && verifyAuth(headers)) {
-        authenticated_user_info = credential.split(":")[0];
-    } else {
-        authenticated_user_info = undefined;
-    }
-
     if (httpMethod === 'GET') {
-        // If client has provided a "since" query parameter, retrieve messages since that timestamp
+        // Handle "new" conversation creation
+        if (conversationUuid === 'new') {
+            const newUuid = uuidv4();
+            const bearerToken = createBearerToken();
+            const vapidKeys = generateVAPIDKeys();
+
+            const newConversation = {
+                conversation_uuid: newUuid,
+                bearer_token: bearerToken,
+                vapid_public_key: vapidKeys.publicKey,
+                vapid_private_key: vapidKeys.privateKey,
+                created_at: new Date().toISOString(),
+            };
+
+            try {
+                await dynamoDb.put({
+                    TableName: CONVERSATION_TABLE,
+                    Item: newConversation,
+                }).promise();
+
+                return response(201, {
+                    message: 'New conversation created',
+                    conversation_uuid: newUuid,
+                    bearer_token: bearerToken,
+                    vapid_public_key: vapidKeys.publicKey,
+                });
+            } catch (error) {
+                console.error('Error creating conversation:', error);
+                return response(500, { error: 'Could not create conversation' });
+            }
+        } else {
+            // Verify the bearer token for an existing conversation
+            const token = headers?.Authorization?.split('Bearer ')[1];
+            const verified = await verifyBearerToken(conversationUuid, token);
+            if (!verified) {
+                return response(401, { error: 'Invalid bearer token' });
+            }
+        }
+        // Retrieve messages for an existing conversation
         const since = event.queryStringParameters?.since;
         let params;
         if (since) {
@@ -76,11 +126,23 @@ exports.handler = async (event) => {
             const result = await dynamoDb.query(params).promise();
             return response(200, result.Items.reverse()); // Reverse the order to get oldest messages first
         } catch (error) {
+            // If error is due to UUID not existing, return 404
+            if (error.code === 'ResourceNotFoundException') {
+                return response(404, { error: 'Conversation not found' });
+            }
             console.error('Error querying messages:', error);
             return response(500, { error: 'Could not retrieve messages' });
         }
     } else if (httpMethod === 'POST') {
+        // Verify the bearer token for an existing conversation
+        const token = headers?.Authorization?.split('Bearer ')[1];
+        const verified = await verifyBearerToken(conversationUuid, token);
+        if (!verified) {
+            return response(401, { error: 'Invalid bearer token' });
+        }
+
         // Add a new message to the conversation
+        let authenticated_user_info = null; // FIXME: Add authentication logic
         let name, email, phone, message;
         try {
             ({ name, email, phone, message} = JSON.parse(body));
@@ -104,13 +166,12 @@ exports.handler = async (event) => {
             authenticated_user_info: authenticated_user_info || null,
         };
 
-        const params = {
-            TableName: TABLE_NAME,
-            Item: newMessage,
-        };
-
         try {
-            await dynamoDb.put(params).promise();
+            await dynamoDb.put({
+                TableName: TABLE_NAME,
+                Item: newMessage,
+            }).promise();
+
             return response(201, { message: 'Message added', newMessage });
         } catch (error) {
             console.error('Error adding message:', error);

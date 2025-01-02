@@ -152,6 +152,7 @@ resource "aws_iam_policy" "conversation" {
         Effect: "Allow",
         Resource: [
             "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/Messages",
+            "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/Conversations",
         ]
       }
     ]
@@ -186,4 +187,22 @@ resource "aws_dynamodb_table" "messages" {
     name = "timestamp"
     type = "S"
   }
-} 
+}
+
+####
+# DynamoDB table for conversations
+#
+# Table name: Conversations
+# conversation_uuid,	    Partition Key, UUID for the conversation
+####
+
+resource "aws_dynamodb_table" "conversations" {
+  name           = "Conversations"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "conversation_uuid"
+
+  attribute {
+    name = "conversation_uuid"
+    type = "S"
+  }
+}
