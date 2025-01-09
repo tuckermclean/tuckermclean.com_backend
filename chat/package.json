@@ -1,7 +1,7 @@
 {
-  "name": "conversation",
+  "name": "chat",
   "version": "1.0.0",
-  "description": "Lambda function for dealing with messages and convo threads",
+  "description": "Lambda function for chat",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -9,9 +9,6 @@
   "author": "Tucker McLean",
   "license": "UNLICENSED",
   "dependencies": {
-    "aws-sdk": "^2.1692.0",
-    "crypto": "^1.0.1",
-    "uuid": "^11.0.3",
-    "web-push": "^3.6.7"
+    "aws-sdk": "^2.1692.0"
   }
 }
