@@ -4,3 +4,4 @@
 *.tfstate.backup
 *.zip
 node_modules/
+variables.tf

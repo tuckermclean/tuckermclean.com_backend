@@ -75,6 +75,16 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
       "*"
     ]
   }
+
+  statement {
+    actions = [
+      "cognito-idp:AdminListGroupsForUser",
+    ]
+    resources = [
+      aws_cognito_user_pool.pool.arn,
+    ]
+  }
+
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_exec_role_attachment" {
@@ -108,76 +118,117 @@ resource "aws_lambda_function" "ws_handler_lambda" {
   source_code_hash = data.archive_file.chat.output_base64sha256
   # The above references a zip file that you presumably have
   # in your Terraform folder. We'll talk about building that next.
+  environment {
+    variables = {
+      USER_POOL_ID = aws_cognito_user_pool.pool.id,
+      CLIENT_ID = aws_cognito_user_pool_client.pool.id,
+    }
+  }
 }
 
 #####################################################################
-# 5. API Gateway WebSocket
+# 5. API Gateway WebSocket (no auth)
 #####################################################################
-resource "aws_apigatewayv2_api" "websocket_api" {
-  name                = "MyChatWebSocketAPI"
+resource "aws_apigatewayv2_api" "guest_ws_api" {
+  name                = "GuestWebSocketAPI"
   protocol_type       = "WEBSOCKET"
   route_selection_expression = "$request.body.action"
 }
 
 # Integration for all routes
-resource "aws_apigatewayv2_integration" "websocket_integration" {
-  api_id                = aws_apigatewayv2_api.websocket_api.id
+resource "aws_apigatewayv2_integration" "guest_ws_integration" {
+  api_id                = aws_apigatewayv2_api.guest_ws_api.id
   integration_type      = "AWS_PROXY"
   integration_uri       = aws_lambda_function.ws_handler_lambda.arn
   integration_method    = "POST"
 }
 
-#####################################################################
-# 6. Routes: connect, disconnect, sendMessage
-#####################################################################
-resource "aws_apigatewayv2_route" "connect_route" {
-  api_id    = aws_apigatewayv2_api.websocket_api.id
+# Routes
+resource "aws_apigatewayv2_route" "guest_connect" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
   route_key = "$connect"
 
   authorization_type = "NONE"
-  target            = "integrations/${aws_apigatewayv2_integration.websocket_integration.id}"
+  target            = "integrations/${aws_apigatewayv2_integration.guest_ws_integration.id}"
 }
 
-resource "aws_apigatewayv2_route" "disconnect_route" {
-  api_id    = aws_apigatewayv2_api.websocket_api.id
+resource "aws_apigatewayv2_route" "guest_disconnect" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
   route_key = "$disconnect"
 
   authorization_type = "NONE"
-  target            = "integrations/${aws_apigatewayv2_integration.websocket_integration.id}"
+  target            = "integrations/${aws_apigatewayv2_integration.guest_ws_integration.id}"
 }
 
-resource "aws_apigatewayv2_route" "sendmessage_route" {
-  api_id    = aws_apigatewayv2_api.websocket_api.id
+resource "aws_apigatewayv2_route" "guest_sendmessage" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
   route_key = "sendMessage"
 
   authorization_type = "NONE"
-  target            = "integrations/${aws_apigatewayv2_integration.websocket_integration.id}"
+  target            = "integrations/${aws_apigatewayv2_integration.guest_ws_integration.id}"
 }
 
-#####################################################################
-# 7. Stage
-#####################################################################
-resource "aws_apigatewayv2_stage" "websocket_stage" {
-  api_id      = aws_apigatewayv2_api.websocket_api.id
+resource "aws_apigatewayv2_route_response" "guest_sendmessage" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
+  route_id  = aws_apigatewayv2_route.guest_sendmessage.id
+  route_response_key = "$default"
+}
+
+resource "aws_apigatewayv2_route" "guest_authenticate" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
+  route_key = "authenticate"
+
+  authorization_type = "NONE"
+  target            = "integrations/${aws_apigatewayv2_integration.guest_ws_integration.id}"
+}
+
+resource "aws_apigatewayv2_route_response" "guest_authenticate" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
+  route_id  = aws_apigatewayv2_route.guest_authenticate.id
+  route_response_key = "$default"
+}
+
+# Stage
+resource "aws_apigatewayv2_stage" "guest_stage" {
+  api_id      = aws_apigatewayv2_api.guest_ws_api.id
   name        = "prod"
   auto_deploy = true
 }
 
-#####################################################################
-# 8. Permissions so API Gateway can invoke Lambda
-#####################################################################
-resource "aws_lambda_permission" "apigw_permission" {
+# Permissions
+resource "aws_lambda_permission" "guest_ws_permission" {
   statement_id  = "AllowWebSocketInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.ws_handler_lambda.arn
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.websocket_api.execution_arn}/*"
+  source_arn    = "${aws_apigatewayv2_api.guest_ws_api.execution_arn}/*"
 }
 
-#####################################################################
-# 9. Output the WebSocket URL
-#####################################################################
-output "websocket_url" {
-  description = "The WebSocket URL to connect to"
-  value       = "${aws_apigatewayv2_api.websocket_api.api_endpoint}/${aws_apigatewayv2_stage.websocket_stage.name}"
+###############################################################################
+# 5. Authenticated WebSocket API (Cognito JWT)
+#    (Reuses the same DynamoDB table, but separate code/integration)
+###############################################################################
+# For brevity, we skip the full Cognito config. You can use the example from 
+# the previous conversation. We'll assume you have a user pool & user pool client, 
+# and a Google IdP if needed. We'll just reference them here.
+###############################################################################
+# resource "aws_apigatewayv2_authorizer" "auth_ws_authorizer" {
+#   api_id          = aws_apigatewayv2_api.guest_ws_api.id
+#   name            = "MyWsRequestAuthorizer"
+#   authorizer_type = "REQUEST"
+#   authorizer_uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.auth_lambda.arn}/invocations"
+#   identity_sources = ["route.request.header.Authorization"]  # or querystring, etc.
+# }
+
+###############################################################################
+# 6. Outputs
+###############################################################################
+output "guest_websocket_url" {
+  description = "Guest WebSocket endpoint"
+  value       = "${aws_apigatewayv2_api.guest_ws_api.api_endpoint}/${aws_apigatewayv2_stage.guest_stage.name}"
 }
+
+# output "auth_websocket_url" {
+#   description = "Auth (Cognito) WebSocket endpoint"
+#   value       = "${aws_apigatewayv2_api.guest_ws_api.api_endpoint}/${aws_apigatewayv2_stage.auth_stage.name}"
+# }

@@ -43,6 +43,18 @@ resource "aws_route53_record" "www" {
   }
 }
 
+resource "aws_route53_record" "auth" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = aws_cognito_user_pool_domain.pool.domain
+  type    = "A"
+
+  alias {
+    name                   = aws_cognito_user_pool_domain.pool.cloudfront_distribution
+    zone_id                = aws_cognito_user_pool_domain.pool.cloudfront_distribution_zone_id
+    evaluate_target_health = false
+  }
+}
+
 # resource "aws_route53_record" "api" {
 #   zone_id = aws_route53_zone.main_zone.zone_id
 #   name    = "api.technomantics.com"

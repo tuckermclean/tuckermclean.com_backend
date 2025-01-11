@@ -20,7 +20,7 @@ resource "aws_acm_certificate" "website_cert" {
   domain_name       = "technomantics.com"
   validation_method = "DNS"
 
-  subject_alternative_names = ["www.technomantics.com"]
+  subject_alternative_names = ["www.technomantics.com","api.technomantics.com","auth.technomantics.com"]
 
   lifecycle {
     create_before_destroy = true

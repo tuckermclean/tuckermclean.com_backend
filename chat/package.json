@@ -9,6 +9,8 @@
   "author": "Tucker McLean",
   "license": "UNLICENSED",
   "dependencies": {
-    "aws-sdk": "^2.1692.0"
+    "aws-sdk": "^2.1692.0",
+    "jsonwebtoken": "^9.0.2",
+    "jwk-to-pem": "^2.0.7"
   }
 }
