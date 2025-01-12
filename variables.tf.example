@@ -1,13 +1,21 @@
-variable google_client_id {
-  type        = string
-  default     = "" # Enter your own Google OAuth 2.0 client ID here
-  description = "description"
-  sensitive   = true
-}
+# Fill it out with your own values and save it as variables.tf in the same folder as your main.tf file.
+#
+# variable google_client_id {
+#   type        = string
+#   default     = "" # Enter your own Google OAuth 2.0 client ID here
+#   description = "description"
+#   sensitive   = true
+# }
 
-variable google_client_secret {
-  type        = string
-  default     = ""  # Enter your own Google OAuth 2.0 client secret here
-  description = "description"
-  sensitive   = true
-}
+# variable google_client_secret {
+#   type        = string
+#   default     = ""  # Enter your own Google OAuth 2.0 client secret here
+#   description = "description"
+#   sensitive   = true
+# }
+
+# variable domain_name {
+#   type        = string
+#   default     = "technomantics.com"
+#   description = "description"
+# }

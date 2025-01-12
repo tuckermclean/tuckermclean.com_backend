@@ -33,7 +33,7 @@ resource "aws_cognito_user_group" "admin" {
 # 3. Cognito User Pool Domain (for the Hosted UI, if you use it)
 ###############################################################################
 resource "aws_cognito_user_pool_domain" "pool" {
-  domain       = "auth.technomantics.com"  # must be globally unique
+  domain       = "auth.${var.domain_name}"  # must be globally unique
   certificate_arn = aws_acm_certificate.website_cert.arn
   user_pool_id = aws_cognito_user_pool.pool.id
 }
@@ -85,9 +85,9 @@ resource "aws_cognito_user_pool_client" "pool" {
 
   callback_urls = [
     # Where you want Cognito to redirect back after authentication
-    "https://technomantics.com/callback.html", 
+    "https://${var.domain_name}/callback.html", 
   ]
   logout_urls = [
-    "https://technomantics.com/logout.html"
+    "https://${var.domain_name}/logout.html"
   ]
 }

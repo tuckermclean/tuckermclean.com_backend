@@ -1,5 +1,5 @@
 resource "aws_route53_zone" "main_zone" {
-  name = "technomantics.com"
+  name = var.domain_name
 }
 
 resource "aws_route53_record" "cert_validation" {
@@ -21,7 +21,7 @@ resource "aws_route53_record" "cert_validation" {
 
 resource "aws_route53_record" "root" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "technomantics.com"
+  name    = var.domain_name
   type    = "A"
 
   alias {
@@ -33,7 +33,7 @@ resource "aws_route53_record" "root" {
 
 resource "aws_route53_record" "www" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "www.technomantics.com"
+  name    = "www.${var.domain_name}"
   type    = "A"
 
   alias {
@@ -45,7 +45,7 @@ resource "aws_route53_record" "www" {
 
 resource "aws_route53_record" "auth" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = aws_cognito_user_pool_domain.pool.domain
+  name    = "auth.${var.domain_name}"
   type    = "A"
 
   alias {
@@ -57,7 +57,7 @@ resource "aws_route53_record" "auth" {
 
 # resource "aws_route53_record" "api" {
 #   zone_id = aws_route53_zone.main_zone.zone_id
-#   name    = "api.technomantics.com"
+#   name    = "api.${var.domain_name}"
 #   type    = "A"
 
 #   alias {

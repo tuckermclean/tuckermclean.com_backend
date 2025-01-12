@@ -78,8 +78,8 @@ resource "aws_iam_policy" "s3_deploy_policy" {
           "s3:ListBucket"
         ],
         Resource = [
-          "arn:aws:s3:::technomantics.com",
-          "arn:aws:s3:::technomantics.com/*"
+          "arn:aws:s3:::${var.domain_name}",
+          "arn:aws:s3:::${var.domain_name}/*"
         ]
       }
     ]

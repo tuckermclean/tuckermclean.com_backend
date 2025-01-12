@@ -17,24 +17,24 @@ provider "aws" {
 resource "aws_acm_certificate" "website_cert" {
   provider = aws.us_east_1
 
-  domain_name       = "technomantics.com"
+  domain_name       = var.domain_name
   validation_method = "DNS"
 
-  subject_alternative_names = ["www.technomantics.com","api.technomantics.com","auth.technomantics.com"]
+  subject_alternative_names = ["www.${var.domain_name}","api.${var.domain_name}","auth.${var.domain_name}"]
 
   lifecycle {
     create_before_destroy = true
   }
 
   tags = {
-    Name = "technomantics.com certificate"
+    Name = "${var.domain_name} certificate"
   }
 }
 
 resource "aws_acm_certificate" "api_cert" {
   provider = aws.us_west_2
 
-  domain_name       = "api.technomantics.com"
+  domain_name       = "api.${var.domain_name}"
   validation_method = "DNS"
 
   lifecycle {
@@ -42,6 +42,6 @@ resource "aws_acm_certificate" "api_cert" {
   }
 
   tags = {
-    Name = "api.technomantics.com certificate"
+    Name = "api.${var.domain_name} certificate"
   }
 }

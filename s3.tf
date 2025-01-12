@@ -1,6 +1,6 @@
 resource "aws_s3_bucket" "website_bucket" {
   provider = aws.us_west_2
-  bucket   = "technomantics.com"
+  bucket   = var.domain_name
 
   provisioner "local-exec" {
     when    = create
@@ -9,7 +9,7 @@ resource "aws_s3_bucket" "website_bucket" {
 
   provisioner "local-exec" {
     when    = destroy
-    command = "aws s3 rm s3://technomantics.com --recursive"
+    command = "aws s3 rm s3://${self.bucket} --recursive"
   }
 }
 
@@ -48,7 +48,7 @@ resource "aws_s3_bucket_policy" "website_bucket_policy" {
       "Effect": "Allow",
       "Principal": "*",
       "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::technomantics.com/*"
+      "Resource": "arn:aws:s3:::${var.domain_name}/*"
     }
   ]
 }
@@ -58,7 +58,7 @@ POLICY
 resource "aws_cloudfront_distribution" "cdn" {
   origin {
     domain_name = aws_s3_bucket.website_bucket.bucket_regional_domain_name
-    origin_id   = "S3-Website"
+    origin_id   = var.domain_name
   }
 
   enabled             = true
@@ -72,12 +72,12 @@ resource "aws_cloudfront_distribution" "cdn" {
     error_caching_min_ttl = 5
   }
 
-  aliases = ["technomantics.com", "www.technomantics.com"]
+  aliases = [var.domain_name, "www.${var.domain_name}"]
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-Website"
+    target_origin_id = var.domain_name
     viewer_protocol_policy = "redirect-to-https"
 
     forwarded_values {
