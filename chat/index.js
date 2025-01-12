@@ -55,11 +55,27 @@ async function sendMessage(connectionId, body, domainName, stage) {
             return reject(`Connection ${connectionId} not found.`);
         }
 
-        await client.postToConnection({
-            ConnectionId: connectionId,
-            Data: JSON.stringify(body),
-        }).promise();
-        return resolve(`Message sent to ${connectionId}`);
+        try {
+            await client.postToConnection({
+                ConnectionId: connectionId,
+                Data: JSON.stringify(body),
+            }).promise();
+            return resolve(`Message sent to ${connectionId}`);
+        } catch (err) {
+            // If postToConnection fails, we assume the connection is dead. Let's delete it from the DB.
+            if (err.statusCode === 410) {
+                console.log(`Found stale connection, deleting ${connectionId}`);
+                await dynamo.delete({
+                    TableName: TABLE_NAME,
+                    Key: {
+                        connectionId
+                    }
+                }).promise();
+                return reject(`Found stale connection, deleted ${connectionId}`);
+            } else {
+                return reject(`Failed to send message to ${connectionId}: ${err.message}`);
+            }
+        }
     });
   } catch (err) {
     return reject(`Failed to send message to ${connectionId}: ${err.message}`);
@@ -227,12 +243,16 @@ const onConnect = async (event) => {
       }
     }).promise();
     for (const adminConnection of adminConnections.Items) {
-      await sendMessage(adminConnection.connectionId, {
-        action: "connect",
-        fromAdmin: true,
-        message: 'New connection',
-        connectionId,
-      }, event.requestContext.domainName, event.requestContext.stage);
+      try {
+        await sendMessage(adminConnection.connectionId, {
+            action: "connect",
+            fromAdmin: true,
+            message: 'New connection',
+            connectionId,
+        }, event.requestContext.domainName, event.requestContext.stage);
+      } catch (err) {
+        return { statusCode: 500, body: JSON.stringify({ error: "connect", message: err.message || "Error messaging admins" }) };
+      }
     }
 
     // Send an SMS to the admin to notify them of the new connection
@@ -270,12 +290,16 @@ const onDisconnect = async (event) => {
       }
     }).promise();
     for (const adminConnection of adminConnections.Items) {
-      await sendMessage(adminConnection.connectionId, {
-        action: "disconnect",
-        fromAdmin: true,
-        message: 'Connection disconnected',
-        connectionId,
-      }, event.requestContext.domainName, event.requestContext.stage);
+      try {
+        await sendMessage(adminConnection.connectionId, {
+            action: "disconnect",
+            fromAdmin: true,
+            message: 'Connection disconnected',
+            connectionId,
+        }, event.requestContext.domainName, event.requestContext.stage);
+      } catch (err) {
+        return { statusCode: 500, body: JSON.stringify({ error: "disconnect", message: err.message || "Error messaging admins" }) };
+      }
     }
 
     return {
@@ -355,14 +379,18 @@ const onSendMessage = async (event) => {
             }
             // Send to the specified user
             console.log(`[onSendMessage] Admin -> ${targetConnectionId}: ${message}`);
-            await sendMessage(targetConnectionId, {
-                fromAdmin: true,
-                from: connectionId,
-                message,
-                fullName: await get("fullName", connectionId),
-                email: await get("email", connectionId),
-                phone: await get("phone", connectionId),
-            }, domainName, stage);
+            try {
+                await sendMessage(targetConnectionId, {
+                    fromAdmin: true,
+                    from: connectionId,
+                    message,
+                    fullName: await get("fullName", connectionId),
+                    email: await get("email", connectionId),
+                    phone: await get("phone", connectionId),
+                }, domainName, stage);
+            } catch (err) {
+                return { statusCode: 500, body: JSON.stringify({ error: "sendMessage", message: 'Failed to send message' }) };
+            }
         } else {
             // A user is sending to the admin. We'll find the admin's connection ID(s). 
             // If there's only one admin, you can store or find it. For simplicity, let's assume there's only 1 admin connected 
@@ -386,14 +414,18 @@ const onSendMessage = async (event) => {
             } else {
                 // Send to the admin
                 for (const adminConnection of adminConnections.Items) {
-                    await sendMessage(adminConnection.connectionId, {
-                        fromAdmin: false,
-                        from: connectionId,
-                        message,
-                        fullName: await get("fullName", connectionId),
-                        email: await get("email", connectionId),
-                        phone: await get("phone", connectionId),
-                    }, domainName, stage);
+                    try {
+                        await sendMessage(adminConnection.connectionId, {
+                            fromAdmin: false,
+                            from: connectionId,
+                            message,
+                            fullName: await get("fullName", connectionId),
+                            email: await get("email", connectionId),
+                            phone: await get("phone", connectionId),
+                        }, domainName, stage);
+                    } catch (err) {
+                        return { statusCode: 500, body: JSON.stringify({ error: "sendMessage", message: 'Failed to send message to admins' }) };
+                    }
                 }
             }
         }
@@ -401,6 +433,6 @@ const onSendMessage = async (event) => {
         return { statusCode: 200, body: JSON.stringify({ response: "sendMessage", message: 'Message sent.' }) };
     } catch (err) {
         console.error('[onSendMessage] Error:', err);
-        return { statusCode: 500, body: JSON.stringify({ error: "sendMessage", message: 'Failed to send message.', error: err.stack }) };
+        return { statusCode: 500, body: JSON.stringify({ error: "sendMessage", message: 'Failed to send message.' }) };
     }
 };
