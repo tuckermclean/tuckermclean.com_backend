@@ -122,6 +122,7 @@ resource "aws_lambda_function" "ws_handler_lambda" {
     variables = {
       USER_POOL_ID = aws_cognito_user_pool.pool.id,
       CLIENT_ID = aws_cognito_user_pool_client.pool.id,
+      ADMIN_SNS_TOPIC = aws_sns_topic.chat_topic.arn,
     }
   }
 }
@@ -260,3 +261,24 @@ output "guest_websocket_url" {
 #   description = "Auth (Cognito) WebSocket endpoint"
 #   value       = "${aws_apigatewayv2_api.guest_ws_api.api_endpoint}/${aws_apigatewayv2_stage.auth_stage.name}"
 # }
+
+
+# SNS Topic for sending SMS
+resource "aws_sns_topic" "chat_topic" {
+  name = "ChatTopic"
+}
+
+resource "aws_sns_topic_subscription" "sms_subscription" {
+  topic_arn = aws_sns_topic.chat_topic.arn
+  protocol  = "sms"
+  endpoint  = var.sms_phone_number
+}
+
+resource "aws_pinpoint_app" "chat_app" {
+  name = "ChatApp"
+}
+
+resource "aws_pinpoint_sms_channel" "chat_sms" {
+  application_id = aws_pinpoint_app.chat_app.application_id
+  enabled = true
+}

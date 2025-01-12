@@ -11,6 +11,26 @@ const TABLE_NAME = process.env.TABLE_NAME || 'ChatConnections'; // Make sure to 
 const CLIENT_ID = process.env.CLIENT_ID;
 const USER_POOL_ID = process.env.USER_POOL_ID;
 const AWS_REGION = process.env.AWS_REGION;
+const ADMIN_SNS_TOPIC = process.env.ADMIN_SNS_TOPIC;
+
+// Create SNS service object
+const sns = new AWS.SNS();
+
+async function sendSMS(message) {
+  const params = {
+    TopicArn: ADMIN_SNS_TOPIC,
+    Message: message
+  };
+
+  return new Promise(async (resolve, reject) => {
+    try {
+        //const data = await sns.publish(params).promise();
+        resolve({ye: "ye"}); //data); // FIXME: Make SMS work
+    } catch (err) {
+        return reject({ message: 'Failed to send SMS', error: err });
+    }
+  });
+}
 
 // Helper function to send a WebSocket message to a single connection
 async function sendMessage(connectionId, body, domainName, stage) {
@@ -215,6 +235,9 @@ const onConnect = async (event) => {
       }, event.requestContext.domainName, event.requestContext.stage);
     }
 
+    // Send an SMS to the admin to notify them of the new connection
+    const sms = sendSMS(`New connection: ${connectionId}`);
+
     return {
       statusCode: 200,
       body: JSON.stringify({ response: "connect", message: 'Connected.' }),
@@ -356,6 +379,8 @@ const onSendMessage = async (event) => {
             }).promise();
 
             if (!adminConnections.Items || adminConnections.Items.length === 0) {
+                // Send an SMS to the admin to notify them of the message
+                const sms = sendSMS(`New message: ${message}`);
                 // If no admin connected, handle gracefully
                 return { statusCode: 200, body: JSON.stringify({ error: "sendMessage", message: "No admin is currently connected." }) };
             } else {
