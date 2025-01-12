@@ -271,7 +271,7 @@ resource "aws_sns_topic" "chat_topic" {
 resource "aws_sns_topic_subscription" "sms_subscription" {
   topic_arn = aws_sns_topic.chat_topic.arn
   protocol  = "sms"
-  endpoint  = var.sms_phone_number
+  endpoint  = var.sms_phone_number[terraform.workspace]
 }
 
 resource "aws_pinpoint_app" "chat_app" {

@@ -1,6 +1,6 @@
 resource "aws_s3_bucket" "website_bucket" {
   provider = aws.us_west_2
-  bucket   = var.domain_name
+  bucket   = var.domain_name[terraform.workspace]
 
   provisioner "local-exec" {
     when    = create
@@ -48,7 +48,7 @@ resource "aws_s3_bucket_policy" "website_bucket_policy" {
       "Effect": "Allow",
       "Principal": "*",
       "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::${var.domain_name}/*"
+      "Resource": "arn:aws:s3:::${var.domain_name[terraform.workspace]}/*"
     }
   ]
 }
@@ -58,7 +58,7 @@ POLICY
 resource "aws_cloudfront_distribution" "cdn" {
   origin {
     domain_name = aws_s3_bucket.website_bucket.bucket_regional_domain_name
-    origin_id   = var.domain_name
+    origin_id   = var.domain_name[terraform.workspace]
   }
 
   enabled             = true
@@ -72,12 +72,15 @@ resource "aws_cloudfront_distribution" "cdn" {
     error_caching_min_ttl = 5
   }
 
-  aliases = [var.domain_name, "www.${var.domain_name}"]
+  aliases = [
+    var.domain_name[terraform.workspace],
+    "www.${var.domain_name[terraform.workspace]}",
+  ]
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = var.domain_name
+    target_origin_id = var.domain_name[terraform.workspace]
     viewer_protocol_policy = "redirect-to-https"
 
     forwarded_values {

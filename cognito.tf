@@ -33,7 +33,7 @@ resource "aws_cognito_user_group" "admin" {
 # 3. Cognito User Pool Domain (for the Hosted UI, if you use it)
 ###############################################################################
 resource "aws_cognito_user_pool_domain" "pool" {
-  domain       = "auth.${var.domain_name}"  # must be globally unique
+  domain       = "auth.${var.domain_name[terraform.workspace]}"  # must be globally unique
   certificate_arn = aws_acm_certificate.website_cert.arn
   user_pool_id = aws_cognito_user_pool.pool.id
 }
@@ -48,8 +48,8 @@ resource "aws_cognito_identity_provider" "google" {
   provider_type = "Google"
   provider_details = {
     # Provide your own Google OAuth 2.0 client info here
-    client_id                = var.google_client_id
-    client_secret            = var.google_client_secret
+    client_id                = var.google_client_id[terraform.workspace]
+    client_secret            = var.google_client_secret[terraform.workspace]
     authorize_scopes         = "openid email profile"
     oidc_issuer              = "https://accounts.google.com"
   }
@@ -85,9 +85,9 @@ resource "aws_cognito_user_pool_client" "pool" {
 
   callback_urls = [
     # Where you want Cognito to redirect back after authentication
-    "https://${var.domain_name}/callback.html", 
+    "https://${var.domain_name[terraform.workspace]}/callback.html", 
   ]
   logout_urls = [
-    "https://${var.domain_name}/logout.html"
+    "https://${var.domain_name[terraform.workspace]}/logout.html"
   ]
 }

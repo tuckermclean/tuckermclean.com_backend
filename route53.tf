@@ -1,5 +1,5 @@
 resource "aws_route53_zone" "main_zone" {
-  name = var.domain_name
+  name = var.domain_name[terraform.workspace]
 }
 
 resource "aws_route53_record" "cert_validation" {
@@ -21,7 +21,7 @@ resource "aws_route53_record" "cert_validation" {
 
 resource "aws_route53_record" "root" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = var.domain_name
+  name    = var.domain_name[terraform.workspace]
   type    = "A"
 
   alias {
@@ -33,7 +33,7 @@ resource "aws_route53_record" "root" {
 
 resource "aws_route53_record" "www" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "www.${var.domain_name}"
+  name    = "www.${var.domain_name[terraform.workspace]}"
   type    = "A"
 
   alias {
@@ -45,7 +45,7 @@ resource "aws_route53_record" "www" {
 
 resource "aws_route53_record" "auth" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "auth.${var.domain_name}"
+  name    = "auth.${var.domain_name[terraform.workspace]}"
   type    = "A"
 
   alias {
@@ -57,7 +57,7 @@ resource "aws_route53_record" "auth" {
 
 resource "aws_route53_record" "mx_root" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = var.domain_name
+  name    = var.domain_name[terraform.workspace]
   type    = "MX"
   ttl     = 300
   records = [
@@ -69,7 +69,7 @@ resource "aws_route53_record" "mx_root" {
 # MX record for the wildcard domain
 resource "aws_route53_record" "mx_wildcard" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "*.${var.domain_name}"
+  name    = "*.${var.domain_name[terraform.workspace]}"
   type    = "MX"
   ttl     = 300
   records = [
@@ -81,40 +81,40 @@ resource "aws_route53_record" "mx_wildcard" {
 # DKIM record for the root domain
 resource "aws_route53_record" "dkim_dkim_fm1" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "fm1._domainkey.${var.domain_name}"
+  name    = "fm1._domainkey.${var.domain_name[terraform.workspace]}"
   type    = "CNAME"
   ttl     = 300
   records = [
-    "fm1.${var.domain_name}.dkim.fmhosted.com.",
+    "fm1.${var.domain_name[terraform.workspace]}.dkim.fmhosted.com.",
   ]
 }
 
 # DKIM for fm2
 resource "aws_route53_record" "dkim_dkim_fm2" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "fm2._domainkey.${var.domain_name}"
+  name    = "fm2._domainkey.${var.domain_name[terraform.workspace]}"
   type    = "CNAME"
   ttl     = 300
   records = [
-    "fm2.${var.domain_name}.dkim.fmhosted.com.",
+    "fm2.${var.domain_name[terraform.workspace]}.dkim.fmhosted.com.",
   ]
 }
 
 # DKIM for fm3
 resource "aws_route53_record" "dkim_dkim_fm3" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = "fm3._domainkey.${var.domain_name}"
+  name    = "fm3._domainkey.${var.domain_name[terraform.workspace]}"
   type    = "CNAME"
   ttl     = 300
   records = [
-    "fm3.${var.domain_name}.dkim.fmhosted.com.",
+    "fm3.${var.domain_name[terraform.workspace]}.dkim.fmhosted.com.",
   ]
 }
 
 # SPF record for the root domain
 resource "aws_route53_record" "spf_root" {
   zone_id = aws_route53_zone.main_zone.zone_id
-  name    = var.domain_name
+  name    = var.domain_name[terraform.workspace]
   type    = "TXT"
   ttl     = 300
   records = [
@@ -124,7 +124,7 @@ resource "aws_route53_record" "spf_root" {
 
 # resource "aws_route53_record" "api" {
 #   zone_id = aws_route53_zone.main_zone.zone_id
-#   name    = "api.${var.domain_name}"
+#   name    = "api.${var.domain_name[terraform.workspace]}"
 #   type    = "A"
 
 #   alias {

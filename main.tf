@@ -17,31 +17,20 @@ provider "aws" {
 resource "aws_acm_certificate" "website_cert" {
   provider = aws.us_east_1
 
-  domain_name       = var.domain_name
+  domain_name       = var.domain_name[terraform.workspace]
   validation_method = "DNS"
 
-  subject_alternative_names = ["www.${var.domain_name}","api.${var.domain_name}","auth.${var.domain_name}"]
+  subject_alternative_names = [
+    "www.${var.domain_name[terraform.workspace]}",
+    "api.${var.domain_name[terraform.workspace]}",
+    "auth.${var.domain_name[terraform.workspace]}",
+  ]
 
   lifecycle {
     create_before_destroy = true
   }
 
   tags = {
-    Name = "${var.domain_name} certificate"
-  }
-}
-
-resource "aws_acm_certificate" "api_cert" {
-  provider = aws.us_west_2
-
-  domain_name       = "api.${var.domain_name}"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = {
-    Name = "api.${var.domain_name} certificate"
+    Name = "${var.domain_name[terraform.workspace]} certificate"
   }
 }
