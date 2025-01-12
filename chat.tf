@@ -188,6 +188,34 @@ resource "aws_apigatewayv2_route_response" "guest_authenticate" {
   route_response_key = "$default"
 }
 
+resource "aws_apigatewayv2_route" "guest_set" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
+  route_key = "set"
+
+  authorization_type = "NONE"
+  target            = "integrations/${aws_apigatewayv2_integration.guest_ws_integration.id}"
+}
+
+resource "aws_apigatewayv2_route_response" "guest_set" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
+  route_id  = aws_apigatewayv2_route.guest_set.id
+  route_response_key = "$default"
+}
+
+resource "aws_apigatewayv2_route" "guest_listConnections" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
+  route_key = "listConnections"
+
+  authorization_type = "NONE"
+  target            = "integrations/${aws_apigatewayv2_integration.guest_ws_integration.id}"
+}
+
+resource "aws_apigatewayv2_route_response" "guest_listConnections" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
+  route_id  = aws_apigatewayv2_route.guest_listConnections.id
+  route_response_key = "$default"
+}
+
 # Stage
 resource "aws_apigatewayv2_stage" "guest_stage" {
   api_id      = aws_apigatewayv2_api.guest_ws_api.id

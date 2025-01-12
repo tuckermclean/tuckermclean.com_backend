@@ -17,12 +17,32 @@ async function sendMessage(connectionId, body, domainName, stage) {
   const endpoint = `https://${domainName}/${stage}`;
   const client = new AWS.ApiGatewayManagementApi({ endpoint });
   try {
-    await client.postToConnection({
-      ConnectionId: connectionId,
-      Data: JSON.stringify(body),
-    }).promise();
+    // If connection isn't registered in the DB, send an error message
+    // So first, we check if the connectionId is in the DB
+    return new Promise(async (resolve, reject) => {
+        let connectionData;
+        try {
+            connectionData = await dynamo.get({
+                TableName: TABLE_NAME,
+                Key: {
+                    connectionId
+                }
+            }).promise();
+        } catch (err) {
+            return reject('Error getting connectionId');
+        }
+        if (!connectionData.Item) {
+            return reject(`Connection ${connectionId} not found.`);
+        }
+
+        await client.postToConnection({
+            ConnectionId: connectionId,
+            Data: JSON.stringify(body),
+        }).promise();
+        return resolve(`Message sent to ${connectionId}`);
+    });
   } catch (err) {
-    console.error('Error posting to connection:', err);
+    return reject(`Failed to send message to ${connectionId}: ${err.message}`);
   }
 }
 
@@ -38,17 +58,102 @@ exports.handler = async (event) => {
         return await onSendMessage(event);
       case 'authenticate':
         return await onAuthenticate(event);
+      case 'set':
+        return await onSet(event);
+      case 'listConnections':
+        return await onListConnections(event);
       default:
-        return { statusCode: 400, body: 'Invalid routeKey' };
+        return { statusCode: 400, body: JSON.stringify({ error: "default", message: 'Bad request' }) };
     }
   };
 
+// onListConnections: list all connections in the DB (but must be an admin)
+const onListConnections = async (event) => {
+    const connectionId = event.requestContext.connectionId;
+    let isAdmin = false;
+
+    // isAdmin is set to true if the sender's connection is an admin in the DB
+    try {
+        let response = await dynamo.get({
+            TableName: TABLE_NAME,
+            Key: {
+                connectionId
+            }
+        }).promise();
+        isAdmin = response.Item.isAdmin;
+    } catch (err) {
+        console.error('[onListConnections] Error:', err);
+        return { statusCode: 500, body: JSON.stringify({ error: "listConnections", message: 'Failed to get DB connection' }) };
+    }
+
+    if (!isAdmin) {
+        return { statusCode: 403, body: JSON.stringify({ error: "listConnections", message: 'Unauthorized' }) };
+    }
+
+    try {
+        const connections = await dynamo.scan({
+            TableName: TABLE_NAME,
+        }).promise();
+        return { statusCode: 200, body: JSON.stringify({ response: "listConnections", connections: connections.Items }) };
+    } catch (err) {
+        console.error('[onListConnections] Error:', err);
+        return { statusCode: 500, body: JSON.stringify({ error: "listConnections", message: 'Failed to list connections', trace: err.stack }) };
+    }
+};
+// onSet: set a variable in the connection state
+const onSet = async (event) => {
+    const connectionId = event.requestContext.connectionId;
+    const body = JSON.parse(event.body);
+    const { key, value } = body;
+
+    try {
+        // As long as `key` is within ['name','email','phone'], we can set it
+        if (!['fullName', 'email', 'phone'].includes(key)) {
+            return { statusCode: 400, body: JSON.stringify({ error: "set", message: 'Invalid key' }) };
+        }
+        // As long as `value` is a string and not empty, we can set it
+        if (typeof value !== 'string' || value.trim() === '') {
+            return { statusCode: 400, body: JSON.stringify({ error: "set", message: 'Invalid value' }) };
+        }
+        // Update the connection's state in the DB
+        await dynamo.update({
+            TableName: TABLE_NAME,
+            Key: {
+                connectionId
+            },
+            UpdateExpression: `set ${key} = :val`,
+            ExpressionAttributeValues: {
+                ':val': value
+            },
+        }).promise();
+        return { statusCode: 200, body: JSON.stringify({ response: "set", message: 'Variable set' }) };
+    } catch (err) {
+        console.error('[onSet] Error:', err);
+        return { statusCode: 500, body: JSON.stringify({ error: "set", message: 'Failed to set variable', trace: err.stack }) };
+    }
+};
+
+// get: get a variable from the connection state
+const get = async (key, connectionId) => {
+    try {
+        const response = await dynamo.get({
+            TableName: TABLE_NAME,
+            Key: {
+                connectionId
+            }
+        }).promise();
+        return response.Item[key];
+    } catch (err) {
+        console.error('[get] Error:', err);
+        return undefined;
+    }
+}
 
 // onAuthenticate: verify the Cognito token
 const onAuthenticate = async (event) => {
     const token = JSON.parse(event.body).accessToken;
     if (!token) {
-        return { statusCode: 401, body: 'Unauthorized' };
+        return { statusCode: 401, body: JSON.stringify({ error: "authenticate", message: 'Missing token' }) };
     }
 
     try {
@@ -70,10 +175,10 @@ const onAuthenticate = async (event) => {
                 },
             }).promise();
         }
-        return { statusCode: 200, body: JSON.stringify({ message: 'Token valid', isAdmin, decoded }) };
+        return { statusCode: 200, body: JSON.stringify({ response: "authenticate", message: 'Token valid', isAdmin, decoded }) };
     }
     catch (err) {
-        return { statusCode: 401, body: JSON.stringify({ error: JSON.stringify(err.stack), lol: "lol"}) };
+        return { statusCode: 401, body: JSON.stringify({ error: "authenticate", message: "Token invalid or verification error", trace: err.stack }) };
     }
 };
 
@@ -93,13 +198,30 @@ const onConnect = async (event) => {
       },
     }).promise();
 
+    // Send a message to every admin to notify them of the new connection
+    const adminConnections = await dynamo.scan({
+      TableName: TABLE_NAME,
+      FilterExpression: "isAdmin = :adm",
+      ExpressionAttributeValues: {
+        ":adm": true
+      }
+    }).promise();
+    for (const adminConnection of adminConnections.Items) {
+      await sendMessage(adminConnection.connectionId, {
+        action: "connect",
+        fromAdmin: true,
+        message: 'New connection',
+        connectionId,
+      }, event.requestContext.domainName, event.requestContext.stage);
+    }
+
     return {
       statusCode: 200,
-      body: 'Connected.',
+      body: JSON.stringify({ response: "connect", message: 'Connected.' }),
     };
   } catch (err) {
     console.error('[onConnect] DynamoDB error:', err);
-    return { statusCode: 500, body: 'Failed to connect.' };
+    return { statusCode: 500, body: JSON.stringify({ error: "connect", message: 'Failed to connect.' }) };
   }
 };
 
@@ -116,13 +238,30 @@ const onDisconnect = async (event) => {
       },
     }).promise();
 
+    // Send a message to every admin to notify them of the disconnection
+    const adminConnections = await dynamo.scan({
+      TableName: TABLE_NAME,
+      FilterExpression: "isAdmin = :adm",
+      ExpressionAttributeValues: {
+        ":adm": true
+      }
+    }).promise();
+    for (const adminConnection of adminConnections.Items) {
+      await sendMessage(adminConnection.connectionId, {
+        action: "disconnect",
+        fromAdmin: true,
+        message: 'Connection disconnected',
+        connectionId,
+      }, event.requestContext.domainName, event.requestContext.stage);
+    }
+
     return {
       statusCode: 200,
-      body: 'Disconnected.',
+      body: JSON.stringify({ response: "disconnect", message: 'Disconnected.' }),
     };
   } catch (err) {
     console.error('[onDisconnect] DynamoDB error:', err);
-    return { statusCode: 500, body: 'Failed to disconnect.' };
+    return { statusCode: 500, body: JSON.stringify({ error: "disconnect", message: 'Failed to disconnect.' }) };
   }
 };
 
@@ -137,7 +276,7 @@ const onSendMessage = async (event) => {
         body = JSON.parse(event.body);
     } catch (err) {
         console.error('Invalid JSON:', event.body);
-        return { statusCode: 400, body: 'Invalid request body' };
+        return { statusCode: 400, body: JSON.stringify({ error: "sendMessage", message: 'Invalid JSON' }) };
     }
 
     let isAdmin = false;
@@ -153,10 +292,10 @@ const onSendMessage = async (event) => {
         isAdmin = response.Item.isAdmin;
     } catch (err) {
         console.error('[onSendMessage] Error:', err);
-        return { statusCode: 500, body: 'Failed to get DB connection' };
+        return { statusCode: 500, body: JSON.stringify({ error: "sendMessage", message: 'Failed to get DB connection' }) };
     }
 
-    const { message, targetConnectionId } = body;
+    let { message, targetConnectionId } = body;
     /*
         We might define a simple protocol, for example:
         {
@@ -177,11 +316,30 @@ const onSendMessage = async (event) => {
         if (isAdmin) {
             // Admin is sending a message. Must have a targetConnectionId.
             if (!targetConnectionId) {
-                return { statusCode: 400, body: 'Missing targetConnectionId for admin message' };
+                // If there is a single non-admin user, query the DB for their connectionId
+                const userConnections = await dynamo.scan({
+                    TableName: TABLE_NAME,
+                    FilterExpression: "isAdmin = :adm",
+                    ExpressionAttributeValues: {
+                    ":adm": false
+                    }
+                }).promise();
+                if (userConnections.Items && userConnections.Items.length === 1) {
+                    targetConnectionId = userConnections.Items[0].connectionId;
+                } else {
+                    return { statusCode: 400, body: JSON.stringify({ error: "sendMessage", message: 'No targetConnectionId specified' }) };
+                }
             }
             // Send to the specified user
             console.log(`[onSendMessage] Admin -> ${targetConnectionId}: ${message}`);
-            await sendMessage(targetConnectionId, { fromAdmin: true, message }, domainName, stage);
+            await sendMessage(targetConnectionId, {
+                fromAdmin: true,
+                from: connectionId,
+                message,
+                fullName: await get("fullName", connectionId),
+                email: await get("email", connectionId),
+                phone: await get("phone", connectionId),
+            }, domainName, stage);
         } else {
             // A user is sending to the admin. We'll find the admin's connection ID(s). 
             // If there's only one admin, you can store or find it. For simplicity, let's assume there's only 1 admin connected 
@@ -199,18 +357,25 @@ const onSendMessage = async (event) => {
 
             if (!adminConnections.Items || adminConnections.Items.length === 0) {
                 // If no admin connected, handle gracefully
-                return { statusCode: 200, body: 'No admin currently connected.' };
+                return { statusCode: 200, body: JSON.stringify({ error: "sendMessage", message: "No admin is currently connected." }) };
             } else {
                 // Send to the admin
                 for (const adminConnection of adminConnections.Items) {
-                    await sendMessage(adminConnection.connectionId, { fromAdmin: false, message }, domainName, stage);
+                    await sendMessage(adminConnection.connectionId, {
+                        fromAdmin: false,
+                        from: connectionId,
+                        message,
+                        fullName: await get("fullName", connectionId),
+                        email: await get("email", connectionId),
+                        phone: await get("phone", connectionId),
+                    }, domainName, stage);
                 }
             }
         }
 
-        return { statusCode: 200, body: 'Message sent' };
+        return { statusCode: 200, body: JSON.stringify({ response: "sendMessage", message: 'Message sent.' }) };
     } catch (err) {
         console.error('[onSendMessage] Error:', err);
-        return { statusCode: 500, body: 'Failed to send message.' };
+        return { statusCode: 500, body: JSON.stringify({ error: "sendMessage", message: 'Failed to send message.', error: err.stack }) };
     }
 };
