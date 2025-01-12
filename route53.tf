@@ -55,6 +55,73 @@ resource "aws_route53_record" "auth" {
   }
 }
 
+resource "aws_route53_record" "mx_root" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = var.domain_name
+  type    = "MX"
+  ttl     = 300
+  records = [
+    "10 in1-smtp.messagingengine.com.",
+    "20 in2-smtp.messagingengine.com.",
+  ]
+}
+
+# MX record for the wildcard domain
+resource "aws_route53_record" "mx_wildcard" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = "*.${var.domain_name}"
+  type    = "MX"
+  ttl     = 300
+  records = [
+    "10 in1-smtp.messagingengine.com.",
+    "20 in2-smtp.messagingengine.com.",
+  ]
+}
+
+# DKIM record for the root domain
+resource "aws_route53_record" "dkim_dkim_fm1" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = "fm1._domainkey.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 300
+  records = [
+    "fm1.${var.domain_name}.dkim.fmhosted.com.",
+  ]
+}
+
+# DKIM for fm2
+resource "aws_route53_record" "dkim_dkim_fm2" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = "fm2._domainkey.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 300
+  records = [
+    "fm2.${var.domain_name}.dkim.fmhosted.com.",
+  ]
+}
+
+# DKIM for fm3
+resource "aws_route53_record" "dkim_dkim_fm3" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = "fm3._domainkey.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 300
+  records = [
+    "fm3.${var.domain_name}.dkim.fmhosted.com.",
+  ]
+}
+
+# SPF record for the root domain
+resource "aws_route53_record" "spf_root" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = var.domain_name
+  type    = "TXT"
+  ttl     = 300
+  records = [
+    "v=spf1 include:spf.messagingengine.com ?all",
+  ]
+}
+
 # resource "aws_route53_record" "api" {
 #   zone_id = aws_route53_zone.main_zone.zone_id
 #   name    = "api.${var.domain_name}"
