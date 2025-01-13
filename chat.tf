@@ -249,19 +249,6 @@ resource "aws_lambda_permission" "guest_ws_permission" {
 #   identity_sources = ["route.request.header.Authorization"]  # or querystring, etc.
 # }
 
-###############################################################################
-# 6. Outputs
-###############################################################################
-output "guest_websocket_url" {
-  description = "Guest WebSocket endpoint"
-  value       = "${aws_apigatewayv2_api.guest_ws_api.api_endpoint}/${aws_apigatewayv2_stage.guest_stage.name}"
-}
-
-# output "auth_websocket_url" {
-#   description = "Auth (Cognito) WebSocket endpoint"
-#   value       = "${aws_apigatewayv2_api.guest_ws_api.api_endpoint}/${aws_apigatewayv2_stage.auth_stage.name}"
-# }
-
 
 # SNS Topic for sending SMS
 resource "aws_sns_topic" "chat_topic" {
