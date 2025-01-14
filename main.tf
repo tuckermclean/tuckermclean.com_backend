@@ -34,3 +34,18 @@ resource "aws_acm_certificate" "website_cert" {
     Name = "${var.domain_name[terraform.workspace]} certificate"
   }
 }
+
+resource "aws_acm_certificate" "api_cert" {
+  provider = aws.us_west_2
+
+  domain_name       = "api.${var.domain_name[terraform.workspace]}"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "api ${var.domain_name[terraform.workspace]} certificate"
+  }
+}

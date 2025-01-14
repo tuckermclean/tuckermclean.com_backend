@@ -68,7 +68,8 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
 
   statement {
     actions = [
-      "execute-api:ManageConnections"
+      "execute-api:ManageConnections",
+      "execute-api:Invoke"
     ]
     # ManageConnections allows the Lambda to post messages to connections on the API
     resources = [
@@ -85,6 +86,14 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
     ]
   }
 
+  statement {
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = ["arn:aws:logs:*:*:*"]
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_exec_role_attachment" {
@@ -120,8 +129,11 @@ resource "aws_lambda_function" "ws_handler_lambda" {
   # in your Terraform folder. We'll talk about building that next.
   environment {
     variables = {
-      USER_POOL_ID = aws_cognito_user_pool.pool.id,
-      CLIENT_ID = aws_cognito_user_pool_client.pool.id,
+      API_BASE_URL          = "${aws_apigatewayv2_api.guest_ws_api.api_endpoint}/${aws_apigatewayv2_stage.guest_stage.name}"
+      DOMAIN_NAME           = var.domain_name[terraform.workspace],
+      GOOGLE_CLIENT_ID      = var.google_client_id[terraform.workspace],
+      COGNITO_CLIENT_ID     = aws_cognito_user_pool_client.pool.id,
+      COGNITO_USER_POOL_ID  = aws_cognito_user_pool.pool.id,
       ADMIN_SNS_TOPIC = aws_sns_topic.chat_topic.arn,
     }
   }
@@ -217,6 +229,21 @@ resource "aws_apigatewayv2_route_response" "guest_listConnections" {
   route_response_key = "$default"
 }
 
+# Route: clientConfig
+resource "aws_apigatewayv2_route" "guest_clientConfig" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
+  route_key = "clientConfig"
+
+  authorization_type = "NONE"
+  target            = "integrations/${aws_apigatewayv2_integration.guest_ws_integration.id}"
+}
+
+resource "aws_apigatewayv2_route_response" "guest_clientConfig" {
+  api_id    = aws_apigatewayv2_api.guest_ws_api.id
+  route_id  = aws_apigatewayv2_route.guest_clientConfig.id
+  route_response_key = "$default"
+}
+
 # Stage
 resource "aws_apigatewayv2_stage" "guest_stage" {
   api_id      = aws_apigatewayv2_api.guest_ws_api.id
@@ -233,6 +260,20 @@ resource "aws_lambda_permission" "guest_ws_permission" {
   source_arn    = "${aws_apigatewayv2_api.guest_ws_api.execution_arn}/*"
 }
 
+resource "aws_apigatewayv2_domain_name" "ws_domain" {
+  domain_name = "api.${var.domain_name[terraform.workspace]}"
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate.api_cert.arn
+    endpoint_type    = "REGIONAL"
+    security_policy  = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "ws_mapping" {
+  api_id      = aws_apigatewayv2_api.guest_ws_api.id
+  domain_name = aws_apigatewayv2_domain_name.ws_domain.domain_name
+  stage       = aws_apigatewayv2_stage.guest_stage.name
+}
 ###############################################################################
 # 5. Authenticated WebSocket API (Cognito JWT)
 #    (Reuses the same DynamoDB table, but separate code/integration)

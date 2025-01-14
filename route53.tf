@@ -55,6 +55,17 @@ resource "aws_route53_record" "auth" {
   }
 }
 
+resource "aws_route53_record" "ws_domain" {
+  zone_id = aws_route53_zone.main_zone.zone_id
+  name    = "api.${var.domain_name[terraform.workspace]}"
+  type    = "A"
+  alias {
+    name                   = aws_apigatewayv2_domain_name.ws_domain.domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.ws_domain.domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
 resource "aws_route53_record" "mx_root" {
   zone_id = aws_route53_zone.main_zone.zone_id
   name    = var.domain_name[terraform.workspace]

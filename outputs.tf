@@ -6,7 +6,7 @@ output "nameservers" {
 
 output "api_base_url" {
   description = "Guest WebSocket endpoint"
-  value       = "${aws_apigatewayv2_api.guest_ws_api.api_endpoint}/${aws_apigatewayv2_stage.guest_stage.name}"
+  value       = "wss://api.${var.domain_name[terraform.workspace]}/"
 }
 
 output "domain_name" {
@@ -15,12 +15,6 @@ output "domain_name" {
 
 output "google_client_id" {
   value = var.google_client_id[terraform.workspace]
-  sensitive = true
-}
-
-output "google_client_secret" {
-  value = var.google_client_secret[terraform.workspace]
-  sensitive = true
 }
 
 output "cognito_client_id" {

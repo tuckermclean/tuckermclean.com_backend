@@ -4,42 +4,43 @@ const AWS = require('aws-sdk');
 const { verifyCognitoToken } = require('./cognitoTokenVerifier');
 
 const dynamo = new AWS.DynamoDB.DocumentClient();
-const apiGateway = new AWS.ApiGatewayManagementApi({}); 
+//const apiGateway = new AWS.ApiGatewayManagementApi({}); 
 // We'll set the endpoint dynamically once we have the callback URL
 
 const TABLE_NAME = process.env.TABLE_NAME || 'ChatConnections'; // Make sure to set this in your Lambda's env if needed
-const CLIENT_ID = process.env.CLIENT_ID;
-const USER_POOL_ID = process.env.USER_POOL_ID;
+const COGNITO_CLIENT_ID = process.env.COGNITO_CLIENT_ID;
+const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const AWS_REGION = process.env.AWS_REGION;
 const ADMIN_SNS_TOPIC = process.env.ADMIN_SNS_TOPIC;
 
 // Create SNS service object
 const sns = new AWS.SNS();
 
-async function sendSMS(message) {
-  const params = {
-    TopicArn: ADMIN_SNS_TOPIC,
-    Message: message
-  };
-
-  return new Promise(async (resolve, reject) => {
-    try {
-        //const data = await sns.publish(params).promise();
-        resolve({ye: "ye"}); //data); // FIXME: Make SMS work
-    } catch (err) {
-        return reject({ message: 'Failed to send SMS', error: err });
-    }
-  });
-}
+// FIXME: SMS
+// async function sendSMS(message) {
+//  const params = {
+//    TopicArn: ADMIN_SNS_TOPIC,
+//    Message: message
+//  };
+//
+//  return new Promise(async (resolve, reject) => {
+//    try {
+//        //const data = await sns.publish(params).promise();
+//        resolve({ye: "ye"}); //data); // FIXME: Make SMS work
+//    } catch (err) {
+//        return reject({ message: 'Failed to send SMS', error: err });
+//    }
+//  });
+//}
 
 // Helper function to send a WebSocket message to a single connection
-async function sendMessage(connectionId, body, domainName, stage) {
-  const endpoint = `https://${domainName}/${stage}`;
-  const client = new AWS.ApiGatewayManagementApi({ endpoint });
+async function sendMessage(connectionId, body, domainName) {
   try {
-    // If connection isn't registered in the DB, send an error message
-    // So first, we check if the connectionId is in the DB
-    return new Promise(async (resolve, reject) => {
+   return new Promise(async (resolve, reject) => {
+        const client = new AWS.ApiGatewayManagementApi({ endpoint: domainName });
+        // If connection isn't registered in the DB, send an error message
+        // So first, we check if the connectionId is in the DB
         let connectionData;
         try {
             connectionData = await dynamo.get({
@@ -98,6 +99,8 @@ exports.handler = async (event) => {
         return await onSet(event);
       case 'listConnections':
         return await onListConnections(event);
+      case 'clientConfig':
+        return { statusCode: 200, body: JSON.stringify({ response: "clientConfig", COGNITO_CLIENT_ID, COGNITO_USER_POOL_ID, GOOGLE_CLIENT_ID }) };
       default:
         return { statusCode: 400, body: JSON.stringify({ error: "default", message: 'Bad request' }) };
     }
@@ -195,8 +198,8 @@ const onAuthenticate = async (event) => {
     try {
         const decoded = await verifyCognitoToken(token, {
             region: AWS_REGION,
-            userPoolId: USER_POOL_ID,
-            clientId: CLIENT_ID,
+            userPoolId: COGNITO_USER_POOL_ID,
+            clientId: COGNITO_CLIENT_ID,
         });
         // If decoded.cognito:groups contains "admin", you can set isAdmin to true
         let isAdmin = false;
@@ -251,12 +254,12 @@ const onConnect = async (event) => {
             connectionId,
         }, event.requestContext.domainName, event.requestContext.stage);
       } catch (err) {
-        return { statusCode: 500, body: JSON.stringify({ error: "connect", message: err.message || "Error messaging admins" }) };
+        console.error(`Failed to send message to admin ${adminConnection.connectionId}:`, err);
       }
     }
 
     // Send an SMS to the admin to notify them of the new connection
-    const sms = sendSMS(`New connection: ${connectionId}`);
+    // FIXME: SMS // const sms = sendSMS(`New connection: ${connectionId}`);
 
     return {
       statusCode: 200,
@@ -298,7 +301,7 @@ const onDisconnect = async (event) => {
             connectionId,
         }, event.requestContext.domainName, event.requestContext.stage);
       } catch (err) {
-        return { statusCode: 500, body: JSON.stringify({ error: "disconnect", message: err.message || "Error messaging admins" }) };
+        console.error(`Failed to send message to admin ${adminConnection.connectionId}:`, err);
       }
     }
 
@@ -389,7 +392,7 @@ const onSendMessage = async (event) => {
                     phone: await get("phone", connectionId),
                 }, domainName, stage);
             } catch (err) {
-                return { statusCode: 500, body: JSON.stringify({ error: "sendMessage", message: 'Failed to send message' }) };
+                return { statusCode: 500, body: JSON.stringify({ error: "sendMessage", message: 'Failed to send message'+JSON.stringify(err) }) };
             }
         } else {
             // A user is sending to the admin. We'll find the admin's connection ID(s). 
@@ -408,7 +411,7 @@ const onSendMessage = async (event) => {
 
             if (!adminConnections.Items || adminConnections.Items.length === 0) {
                 // Send an SMS to the admin to notify them of the message
-                const sms = sendSMS(`New message: ${message}`);
+                // FIXME: SMS // const sms = sendSMS(`New message: ${message}`);
                 // If no admin connected, handle gracefully
                 return { statusCode: 200, body: JSON.stringify({ error: "sendMessage", message: "No admin is currently connected." }) };
             } else {
@@ -424,7 +427,7 @@ const onSendMessage = async (event) => {
                             phone: await get("phone", connectionId),
                         }, domainName, stage);
                     } catch (err) {
-                        return { statusCode: 500, body: JSON.stringify({ error: "sendMessage", message: 'Failed to send message to admins' }) };
+                        console.error(`Failed to send message to admin ${adminConnection.connectionId}:`, err);
                     }
                 }
             }
