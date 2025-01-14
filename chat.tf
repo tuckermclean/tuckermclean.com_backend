@@ -94,6 +94,15 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
     ]
     resources = ["arn:aws:logs:*:*:*"]
   }
+
+  statement {
+    actions = [
+      "sns:Publish",
+    ]
+    resources = [
+      aws_sns_topic.chat_topic.arn,
+    ]
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_exec_role_attachment" {
@@ -298,8 +307,8 @@ resource "aws_sns_topic" "chat_topic" {
 
 resource "aws_sns_topic_subscription" "sms_subscription" {
   topic_arn = aws_sns_topic.chat_topic.arn
-  protocol  = "sms"
-  endpoint  = var.sms_phone_number[terraform.workspace]
+  protocol  = "email"  #"sms"
+  endpoint  = var.notify_email[terraform.workspace] #var.sms_phone_number[terraform.workspace]
 }
 
 resource "aws_pinpoint_app" "chat_app" {

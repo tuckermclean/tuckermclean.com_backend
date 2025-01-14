@@ -13,26 +13,26 @@ const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const AWS_REGION = process.env.AWS_REGION;
 const ADMIN_SNS_TOPIC = process.env.ADMIN_SNS_TOPIC;
+const DOMAIN_NAME = process.env.DOMAIN_NAME;
 
 // Create SNS service object
 const sns = new AWS.SNS();
 
-// FIXME: SMS
-// async function sendSMS(message) {
-//  const params = {
-//    TopicArn: ADMIN_SNS_TOPIC,
-//    Message: message
-//  };
-//
-//  return new Promise(async (resolve, reject) => {
-//    try {
-//        //const data = await sns.publish(params).promise();
-//        resolve({ye: "ye"}); //data); // FIXME: Make SMS work
-//    } catch (err) {
-//        return reject({ message: 'Failed to send SMS', error: err });
-//    }
-//  });
-//}
+async function sendSMS(message) {
+ const params = {
+   TopicArn: ADMIN_SNS_TOPIC,
+   Message: message
+ };
+
+ return new Promise(async (resolve, reject) => {
+   try {
+       const data = await sns.publish(params).promise();
+       resolve(data); //data); // FIXME: Make SMS work
+   } catch (err) {
+       return reject({ message: 'Failed to send SMS', error: err });
+   }
+ });
+}
 
 // Helper function to send a WebSocket message to a single connection
 async function sendMessage(connectionId, body, domainName) {
@@ -168,7 +168,7 @@ const onSet = async (event) => {
         return { statusCode: 200, body: JSON.stringify({ response: "set", message: 'Variable set' }) };
     } catch (err) {
         console.error('[onSet] Error:', err);
-        return { statusCode: 500, body: JSON.stringify({ error: "set", message: 'Failed to set variable', trace: err.stack }) };
+        return { statusCode: 500, body: JSON.stringify({ error: "set", message: 'Failed to set variable: '+err }) };
     }
 };
 
@@ -259,7 +259,11 @@ const onConnect = async (event) => {
     }
 
     // Send an SMS to the admin to notify them of the new connection
-    // FIXME: SMS // const sms = sendSMS(`New connection: ${connectionId}`);
+    try {
+        const sms = sendSMS(`New connection: ${connectionId}\nGo to https://${DOMAIN_NAME}/login.html to respond.`);
+    } catch (err) {
+        console.error(`Failed to send SMS:`, err);
+    }
 
     return {
       statusCode: 200,
@@ -411,7 +415,11 @@ const onSendMessage = async (event) => {
 
             if (!adminConnections.Items || adminConnections.Items.length === 0) {
                 // Send an SMS to the admin to notify them of the message
-                // FIXME: SMS // const sms = sendSMS(`New message: ${message}`);
+                try {
+                    const sms = sendSMS(`New message from ${connectionId}: ${message}\nGo to https://${DOMAIN_NAME}/login.html to respond.`);
+                } catch (err) {
+                    console.error(`Failed to send SMS:`, err);
+                }
                 // If no admin connected, handle gracefully
                 return { statusCode: 200, body: JSON.stringify({ error: "sendMessage", message: "No admin is currently connected." }) };
             } else {
