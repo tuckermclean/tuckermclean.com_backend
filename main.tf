@@ -1,5 +1,11 @@
-# Terraform Script for Infrastructure-as-Code Setup
-# Components: S3 bucket, HTTPS CloudFront, Route53, API Gateway, and Hello World Lambda
+terraform {
+  backend "s3" {
+    bucket         = "tuckermclean.com-terraform-state"
+    key            = "terraform/state/tuckermclean.com"
+    region         = "us-west-2"
+    dynamodb_table = "arn:aws:dynamodb:us-west-2:276198986496:table/TerraformStateLock"
+  }
+}
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
