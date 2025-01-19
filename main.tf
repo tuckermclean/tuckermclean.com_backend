@@ -47,6 +47,10 @@ resource "aws_acm_certificate" "api_cert" {
   domain_name       = "api.${var.domain_name[terraform.workspace]}"
   validation_method = "DNS"
 
+  subject_alternative_names = [
+    "api-ws.${var.domain_name[terraform.workspace]}",
+  ]
+
   lifecycle {
     create_before_destroy = true
   }

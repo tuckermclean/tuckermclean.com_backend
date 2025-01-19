@@ -8,7 +8,6 @@
  *       const decoded = await verifyCognitoToken(token, {
  *         region: 'us-east-1',
  *         userPoolId: 'us-east-1_ABC123',
- *         clientId: 'YOUR_APP_CLIENT_ID' // optional if you want to validate audience
  *       });
  *       // Token is valid, do something with decoded payload
  *       return { statusCode: 200, body: JSON.stringify({ message: 'Token valid', decoded }) };
@@ -29,13 +28,15 @@ const jwkToPem = require('jwk-to-pem');
  * @param {object} options
  * @param {string} options.region     - AWS region of the User Pool (e.g., 'us-east-1').
  * @param {string} options.userPoolId - ID of the User Pool (e.g., 'us-east-1_ABC123').
- * @param {string} [options.clientId] - (Optional) Cognito App Client ID if you want to validate `aud`.
  * @return {Promise<object>} Decoded token payload if valid; otherwise throws an error.
  */
-async function verifyCognitoToken(token, { region, userPoolId, clientId }) {
+async function verifyCognitoToken(token) {
   if (!token) {
     throw new Error('Missing token');
   }
+
+  const region = process.env.AWS_REGION;
+  const userPoolId = process.env.COGNITO_USER_POOL_ID;
 
   // 1. Decode header to find the kid
   const decodedHeader = jwt.decode(token, { complete: true });
@@ -90,7 +91,7 @@ function fetchJwks(jwksUri) {
         try {
           const body = JSON.parse(data);
           if (!body.keys) {
-            return reject(new Error('Invalid JWKS response'));
+            return reject(new Error(`Invalid JWKS response: ${data} ${jwksUri}`));
           }
           resolve(body.keys);
         } catch (error) {

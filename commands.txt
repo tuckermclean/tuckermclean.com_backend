@@ -1,1 +1,0 @@
-npm.cmd run build ; aws s3 sync ./dist/ s3://tuckermclean.com --delete --profile DCXXIV-dev
