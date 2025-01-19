@@ -24,7 +24,7 @@ resource "aws_sqs_queue" "chat" {
   name = "chat-websocket-queue"
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.chat_dlq.arn
-    maxReceiveCount = 5
+    maxReceiveCount = 1
   })
 }
 
@@ -372,6 +372,9 @@ resource "aws_apigatewayv2_authorizer" "chat_admin_auth" {
   name             = "AdminAuthorizer"
   identity_sources  = ["$request.header.Authorization"]
   authorizer_payload_format_version = "2.0"
+
+  # Disable caching by setting the TTL to 0
+  authorizer_result_ttl_in_seconds       = 0
 }
 
 # Admin route: GET /listConnections
@@ -400,6 +403,14 @@ resource "aws_apigatewayv2_stage" "chat_http" {
       status      = "$context.status"
       protocol    = "$context.protocol"
       responseLength = "$context.responseLength"
+      authorizerError = "$context.authorizer.error"
+      authorizerPrincipalId = "$context.authorizer.principalId"
+      errorMessage = "$context.error.message"
+      integrationError = "$context.integration.error"
+      integrationStatus = "$context.integration.status"
+
+
+
     })
   }
 }

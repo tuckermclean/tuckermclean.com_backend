@@ -2,84 +2,86 @@ const AWS = require('aws-sdk');
 const dynamo = new AWS.DynamoDB.DocumentClient();
 
 const TABLE_NAME = process.env.TABLE_NAME || "ChatConnections";
-const failures = [];
 
+// We'll collect failures for each SQS record by its messageId.
 exports.handler = async (event) => {
+  const batchFailures = [];
+  
+  // Process each message in the batch.
   for (const record of event.Records) {
-    // Each SQS message is in record.body
     const body = JSON.parse(record.body);
     try {
+      // Process each message. If any message should be retried (or DLQed), 
+      // throw an error or explicitly push its messageId into batchFailures.
       await processMessage(body);
     } catch (err) {
       console.error("Error processing message:", err);
-      failures.push({ itemIdentifier: record.messageId });
+      // Mark this record as failure so that it is not removed from SQS.
+      batchFailures.push({ itemIdentifier: record.messageId });
     }
   }
 
+  // Return the partial batch response: records in batchFailures will be retried.
   return {
-    statusCode: 200,
-    batchItemFailures: failures, 
-    body: JSON.stringify({ status: "Messages processed" }),
+    batchItemFailures: batchFailures,
   };
 };
 
 /**
- * Dispatch each message to the right recipients over WebSocket.
- * E.g. "guestMessage" -> push to all admins; "adminMessage" -> push to that visitor.
+ * Process the message based on its type.
+ * For guest messages (or connection events), attempt to send to all admin connections.
+ * For admin messages (or welcome) send to the target visitor.
+ * If no admin is available for a guestMessage, we attempt to send a 'noAdmins' message to the originating connection,
+ * then throw an error so that this record is marked as failed (and eventually sent to the DLQ).
  */
 async function processMessage(args) {
   if (args.type === "guestMessage" || args.type === "newConnection" || args.type === "endConnection") {
-    // Send the guest message to all admin connections
-    await postToAdmins(
-      { fromAdmin: false, ...args }
-    );
+    // Send guest messages to all admin connections.
+    // postToAdmins is expected to throw if no admin is available.
+    await postToAdmins({ fromAdmin: false, ...args });
   }
   else if (args.type === "welcome" || args.type === "adminMessage") {
-    // Send the admin message to a specific visitor.
-    // Assume your table items store visitorId so you can find them:
+    // For admin messages, find the visitor connection and post the message.
     const visitorConnection = await findVisitorConnection(args.targetConnectionId || args.connectionId);
     if (!visitorConnection) {
       console.log(`Visitor not connected or not found for ID: ${args.targetConnectionId || args.connectionId}`);
+      // The connection is ephemeral anyway, so we don't need to throw an error here.
       return;
     }
-
-    await postToConnection(
-      visitorConnection.connectionId,
-      { fromAdmin: true, ...args }
-    );
+    await postToConnection(visitorConnection.connectionId, { fromAdmin: true, ...args });
   }
   else {
     console.warn("Unknown message type:", args.type);
+    // Optionally, you could decide to treat unknown message types as success or failure.
+    // Here, we'll assume success.
   }
 }
 
 /**
- * Helper to return true if the connectionId is in the table.
+ * Look up a connection by connectionId.
  */
 async function findVisitorConnection(connectionId) {
   const result = await dynamo.get({
     TableName: TABLE_NAME,
     Key: { connectionId },
   }).promise();
-
   return result.Item;
 }
 
 /**
- * Helper to post a message to a WebSocket connection. 
- * If we get a 410 error, we remove the stale connection from DynamoDB.
+ * Helper to send a message to a specific WebSocket connection.
+ * On a 410 error (stale connection) the connection is removed.
  */
 async function postToConnection(connectionId, payload) {
-  // 28sbkickxh.execute-api.us-west-2.amazonaws.com
   const endpoint = `${process.env.API_WS_ID}.execute-api.${process.env.AWS_REGION}.amazonaws.com/${process.env.API_WS_STAGE}`;
   const apigw = new AWS.ApiGatewayManagementApi({ endpoint });
-
+  
   try {
     await apigw.postToConnection({
       ConnectionId: connectionId,
       Data: JSON.stringify(payload),
     }).promise();
-    console.log(`Delivered to ${connectionId} ${JSON.stringify(payload)}`);
+    console.log(`Delivered to ${connectionId}: ${JSON.stringify(payload)}`);
   } catch (err) {
     if (err.statusCode === 410) {
       console.log(`Stale connection, removing ${connectionId}`);
@@ -89,14 +91,15 @@ async function postToConnection(connectionId, payload) {
       }).promise();
     } else {
       console.error(`Failed to postToConnection for ${connectionId}:`, err);
+      // Re-throw error to mark this SQS message as failed.
       throw err;
     }
   }
 }
 
-
 /**
  * Helper to post a message to all admin connections.
+ * If no admins are available, send a "noAdmins" message to the sender and then throw an error.
  */
 async function postToAdmins(args) {
   const admins = await dynamo.scan({
@@ -105,14 +108,17 @@ async function postToAdmins(args) {
     ExpressionAttributeValues: { ":adm": true },
   }).promise();
 
-  // If there are 0 admins, we can't send the message
   if (!admins.Items || admins.Items.length === 0) {
-    // Send a message to the guest if it's the first time this message has been processed
-    await postToConnection(args.connectionId, { type: "noAdmins", ...args });
-    throw new Error(`No admins connected: ${JSON.stringify(args)}`);
+    // No admins connected.
+    console.log(`No admins available for message from ${args.connectionId}`);
+    // Optionally, send a message to the originating connection about no admin availability.
+    await postToConnection(args.connectionId, { ...args, type: "noAdmins" });
+    // Throw an error so that this message is not deleted but instead moves to the DLQ.
+    throw new Error(`No admins available for message: ${JSON.stringify(args)}`);
   } else {
-      for (const admin of admins.Items) {
-        await postToConnection(admin.connectionId, { connectionId: admin.connectionId, ...args });
-      }
+    for (const admin of admins.Items) {
+      // Post the message to each admin.
+      await postToConnection(admin.connectionId, { ...args, connectionId: admin.connectionId });
+    }
   }
 }

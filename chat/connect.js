@@ -96,23 +96,29 @@ async function redriveDLQ() {
 
     for (const msg of resp.Messages) {
       try {
-        // 1. Re-publish to main queue
-        await sqs.sendMessage({
-          QueueUrl: process.env.QUEUE_URL,
-          MessageBody: msg.Body
-        }).promise();
-
         // 2. Delete from DLQ
         await sqs.deleteMessage({
           QueueUrl: process.env.DLQ_QUEUE_URL,
           ReceiptHandle: msg.ReceiptHandle
         }).promise();
 
+        console.log(msg.Body);
+        // If the message type is "guestMessage", we will redrive it to the main queue
+        const body = JSON.parse(msg.Body);
+        if (body.type !== "guestMessage") {
+          continue;
+        }
+        console.log("Redriving guestMessage:", body);
+
+        // 1. Re-publish to main queue
+        await sqs.sendMessage({
+          QueueUrl: process.env.QUEUE_URL,
+          MessageBody: msg.Body
+        }).promise();
+
         console.log("Redriven message ID:", msg.MessageId);
       } catch (err) {
         console.error("Failed to redrive message ID:", msg.MessageId, err);
-        // If we fail, you might break or continue. 
-        // But typically you don't want an infinite loop, so handle carefully.
       }
     }
   }
