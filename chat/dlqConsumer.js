@@ -35,37 +35,16 @@ exports.handler = async (event) => {
  * then throw an error so that this record is marked as failed (and eventually sent to the DLQ).
  */
 async function processMessage(args) {
-  if (args.type === "guestMessage" || args.type === "newConnection" || args.type === "endConnection") {
+  if (args.type === "guestMessage") {
     // Send guest messages to all admin connections.
     // postToAdmins is expected to throw if no admin is available.
     await postToAdmins({ fromAdmin: false, ...args });
   }
-  else if (args.type === "welcome" || args.type === "adminMessage") {
-    // For admin messages, find the visitor connection and post the message.
-    const visitorConnection = await findVisitorConnection(args.targetConnectionId || args.connectionId);
-    if (!visitorConnection) {
-      console.log(`Visitor not connected or not found for ID: ${args.targetConnectionId || args.connectionId}`);
-      // The connection is ephemeral anyway, so we don't need to throw an error here.
-      return;
-    }
-    await postToConnection(visitorConnection.connectionId, { fromAdmin: true, ...args });
-  }
   else {
-    console.warn("Unknown message type:", args.type);
+    console.warn("Dropping message: ", args.type);
     // Optionally, you could decide to treat unknown message types as success or failure.
     // Here, we'll assume success.
   }
-}
-
-/**
- * Look up a connection by connectionId.
- */
-async function findVisitorConnection(connectionId) {
-  const result = await dynamo.get({
-    TableName: TABLE_NAME,
-    Key: { connectionId },
-  }).promise();
-  return result.Item;
 }
 
 /**
@@ -111,8 +90,6 @@ async function postToAdmins(args) {
   if (!admins.Items || admins.Items.length === 0) {
     // No admins connected.
     console.log(`No admins available for message from ${args.connectionId}`);
-    // Optionally, send a message to the originating connection about no admin availability.
-    await postToConnection(args.connectionId, { ...args, type: "noAdmins" });
     // Throw an error so that this message is not deleted but instead moves to the DLQ.
     throw new Error(`No admins available for message: ${JSON.stringify(args)}`);
   } else {

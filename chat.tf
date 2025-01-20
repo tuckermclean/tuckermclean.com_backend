@@ -193,6 +193,22 @@ resource "aws_lambda_function" "chat_consumer" {
   }
 }
 
+######## DLQ Consumer Lambda (Consumes SQS, pushes to Admin WebSockets) ######
+resource "aws_lambda_function" "chat_dlq_consumer" {
+  function_name = "chat-dlq-consumer"
+  role          = aws_iam_role.chat.arn
+  runtime       = "nodejs18.x"
+  handler       = "dlqConsumer.handler"
+  filename      = "${path.module}/chat.zip"
+  environment {
+    variables = {
+      TABLE_NAME = aws_dynamodb_table.chat_connections.name
+      API_WS_ID = aws_apigatewayv2_api.chat_websocket.id
+      API_WS_STAGE = aws_apigatewayv2_stage.chat_websocket.name
+    }
+  }
+}
+
 ################### Admin Authorizer Lambda (Custom) ##########################
 resource "aws_lambda_function" "chat_admin_authorizer" {
   function_name = "chat-admin-authorizer"
@@ -225,6 +241,14 @@ resource "aws_lambda_function" "chat_list_connections" {
 resource "aws_lambda_event_source_mapping" "chat_consumer" {
   event_source_arn = aws_sqs_queue.chat.arn
   function_name    = aws_lambda_function.chat_consumer.arn
+  enabled          = true
+  batch_size       = 10
+  function_response_types = ["ReportBatchItemFailures"]
+}
+
+resource "aws_lambda_event_source_mapping" "chat_dlq_consumer" {
+  event_source_arn = aws_sqs_queue.chat_dlq.arn
+  function_name    = aws_lambda_function.chat_dlq_consumer.arn
   enabled          = true
   batch_size       = 10
   function_response_types = ["ReportBatchItemFailures"]
