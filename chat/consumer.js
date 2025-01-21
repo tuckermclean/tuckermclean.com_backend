@@ -45,6 +45,8 @@ async function processMessage(args) {
     const visitorConnection = await findVisitorConnection(args.targetConnectionId || args.connectionId);
     if (!visitorConnection) {
       console.log(`Visitor not connected or not found for ID: ${args.targetConnectionId || args.connectionId}`);
+      // Let the admin know that the visitor is not connected.
+      await postToAdmins({ ...args, type: "visitorNotFound" });
       // The connection is ephemeral anyway, so we don't need to throw an error here.
       return;
     }

@@ -28,6 +28,25 @@ resource "aws_sqs_queue" "chat" {
   })
 }
 
+# SNS Topic for DLQ messages
+resource "aws_sns_topic" "chat_dlq" {
+  name = "chat-websocket-dlq"
+}
+
+# Subscribe the DLQ to the SNS topic
+resource "aws_sns_topic_subscription" "chat_dlq" {
+  topic_arn = aws_sns_topic.chat_dlq.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.chat_dlq.arn
+}
+
+# Subscribe admin email to the DLQ
+resource "aws_sns_topic_subscription" "chat_dlq_email" {
+  topic_arn = aws_sns_topic.chat_dlq.arn
+  protocol  = "email"
+  endpoint  = var.notify_email[terraform.workspace]
+}
+
 ###############################################################################
 # IAM Role + Policy for Lambdas
 ###############################################################################
