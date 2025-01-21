@@ -62,11 +62,11 @@ resource "aws_iam_policy" "terraform_update_policy" {
   description = "Policy to allow updating of Terraform resources"
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = {
+    Statement = [{
         Effect   = "Allow"
         Action   = "*"
         Resource = "*"
-    }
+    }]
   })
 }
 
