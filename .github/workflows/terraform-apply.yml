@@ -1,0 +1,74 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  TF_WORKING_DIR: . # Adjust this if Terraform files are in a different directory.
+  TF_WORKSPACE: default # Adjust this if you are using a different workspace.
+
+jobs:
+  terraform-apply:
+    name: Apply Terraform Changes
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout the repository
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # Set up Terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.10.4 # Use the version your project requires
+
+    # Configure AWS Credentials
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v3
+      with:
+        aws-access-key-id: ${{ secrets.TERRAFORM_AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    # Validate Terraform code
+    - name: Terraform Init
+      working-directory: ${{ env.TF_WORKING_DIR }}
+      run: terraform init
+
+    - name: Terraform Validate
+      working-directory: ${{ env.TF_WORKING_DIR }}
+      run: terraform validate
+
+    # Select Terraform workspace
+    - name: Terraform Workspace
+      working-directory: ${{ env.TF_WORKING_DIR }}
+      run: terraform workspace select ${{ env.TF_WORKSPACE }}
+
+    # Terraform Plan
+    - name: Terraform Plan
+      working-directory: ${{ env.TF_WORKING_DIR }}
+      run: terraform plan -out=tfplan
+
+    # Terraform Apply
+    - name: Terraform Apply
+      working-directory: ${{ env.TF_WORKING_DIR }}
+      id: apply
+      run: terraform apply -auto-approve tfplan
+
+    # Post Apply - Check for Errors
+    - name: Handle Errors
+      if: failure()
+      run: echo "Terraform apply failed. Please check the logs."
+
+    # Notification or Reporting
+    - name: Notify Success or Failure
+      run: |
+        if [[ "${{ job.status }}" == "success" ]]; then
+          echo "Terraform apply completed successfully."
+        else
+          echo "Terraform apply failed."
+        fi
