@@ -47,11 +47,6 @@ jobs:
       working-directory: ${{ env.TF_WORKING_DIR }}
       run: terraform validate
 
-    # Select Terraform workspace
-    - name: Terraform Workspace
-      working-directory: ${{ env.TF_WORKING_DIR }}
-      run: terraform workspace select ${{ env.TF_WORKSPACE }}
-
     # Terraform Plan
     - name: Terraform Plan
       working-directory: ${{ env.TF_WORKING_DIR }}
