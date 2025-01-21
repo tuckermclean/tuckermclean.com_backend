@@ -34,6 +34,10 @@ jobs:
         aws-secret-access-key: ${{ secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
 
+    # Write out variables file from secret
+    - name: Write Variables File
+      run: echo "${{ secrets.TERRAFORM_VARS }}" > ${{ env.TF_WORKING_DIR }}/variables.tf
+
     # Validate Terraform code
     - name: Terraform Init
       working-directory: ${{ env.TF_WORKING_DIR }}
