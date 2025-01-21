@@ -36,7 +36,7 @@ jobs:
 
     # Write out variables file from secret
     - name: Write Variables File
-      run: echo "${{ secrets.TERRAFORM_VARS }}" > ${{ env.TF_WORKING_DIR }}/variables.tf
+      run: echo '${{ secrets.TERRAFORM_VARS }}' > ${{ env.TF_WORKING_DIR }}/variables.tf
 
     # Validate Terraform code
     - name: Terraform Init
