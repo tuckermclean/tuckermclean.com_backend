@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  TF_WORKING_DIR: . # Adjust this if Terraform files are in a different directory.
-  TF_WORKSPACE: default # Adjust this if you are using a different workspace.
+  TF_WORKING_DIR: .
+  TF_WORKSPACE: ${{ secrets.TERRAFORM_WORKSPACE }}
 
 jobs:
   terraform-apply:
