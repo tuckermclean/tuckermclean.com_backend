@@ -1,16 +1,6 @@
 resource "aws_s3_bucket" "website_bucket" {
   provider = aws.us_west_2
   bucket   = var.domain_name[terraform.workspace]
-
-  provisioner "local-exec" {
-    when    = create
-    command = "aws s3 sync ../tuckermclean.com s3://${aws_s3_bucket.website_bucket.bucket} --delete --exclude \".git/*\""
-  }
-
-  provisioner "local-exec" {
-    when    = destroy
-    command = "aws s3 rm s3://${self.bucket} --recursive"
-  }
 }
 
 resource "aws_s3_bucket_website_configuration" "website_bucket" {
