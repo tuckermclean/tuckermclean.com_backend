@@ -45,6 +45,23 @@ resource "aws_s3_bucket_policy" "website_bucket_policy" {
 POLICY
 }
 
+resource "aws_cloudfront_function" "rewrite_index" {
+  name    = "rewrite-index-html"
+  runtime = "cloudfront-js-1.0"
+  comment = "Rewrite /foo/ to /foo/index.html"
+  publish = true
+
+  code = <<EOF
+function handler(event) {
+    var request = event.request;
+    if (request.uri.endsWith('/')) {
+        request.uri += 'index.html';
+    }
+    return request;
+}
+EOF
+}
+
 resource "aws_cloudfront_distribution" "cdn" {
   origin {
     domain_name = aws_s3_bucket.website_bucket.bucket_regional_domain_name
@@ -78,6 +95,11 @@ resource "aws_cloudfront_distribution" "cdn" {
       cookies {
         forward = "none"
       }
+    }
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.rewrite_index.arn
     }
   }
 
