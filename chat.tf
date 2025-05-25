@@ -345,10 +345,13 @@ resource "aws_apigatewayv2_api" "chat_http" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = [
+    allow_origins = concat([
       "https://${var.domain_name[terraform.workspace]}",
       "https://www.${var.domain_name[terraform.workspace]}"
-    ]
+    ], terraform.workspace == "prod" ? [
+      "https://alijamaluddin.com",
+      "https://www.alijamaluddin.com"
+    ] : [])
     allow_methods = ["GET", "POST"] # Include all methods you use
     allow_headers = ["*"]           # Or just "Content-Type", "Authorization", etc.
     expose_headers = []
@@ -525,6 +528,47 @@ resource "aws_apigatewayv2_api_mapping" "chat_websocket_mapping" {
 resource "aws_apigatewayv2_api_mapping" "chat_http_mapping" {
   api_id      = aws_apigatewayv2_api.chat_http.id
   domain_name = aws_apigatewayv2_domain_name.chat_api.domain_name
+  stage       = aws_apigatewayv2_stage.chat_http.name
+  api_mapping_key = ""
+}
+
+# Production-only domain names for alijamaluddin.com
+resource "aws_apigatewayv2_domain_name" "chat_api_ws_alijamaluddin" {
+  count = terraform.workspace == "prod" ? 1 : 0
+
+  domain_name = "api-ws.alijamaluddin.com"
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate.api_cert.arn
+    endpoint_type    = "REGIONAL"
+    security_policy  = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_domain_name" "chat_api_alijamaluddin" {
+  count = terraform.workspace == "prod" ? 1 : 0
+
+  domain_name = "api.alijamaluddin.com"
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate.api_cert.arn
+    endpoint_type    = "REGIONAL"
+    security_policy  = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "chat_websocket_mapping_alijamaluddin" {
+  count = terraform.workspace == "prod" ? 1 : 0
+
+  api_id      = aws_apigatewayv2_api.chat_websocket.id
+  domain_name = aws_apigatewayv2_domain_name.chat_api_ws_alijamaluddin[0].domain_name
+  stage       = aws_apigatewayv2_stage.chat_websocket.name
+  api_mapping_key = ""
+}
+
+resource "aws_apigatewayv2_api_mapping" "chat_http_mapping_alijamaluddin" {
+  count = terraform.workspace == "prod" ? 1 : 0
+
+  api_id      = aws_apigatewayv2_api.chat_http.id
+  domain_name = aws_apigatewayv2_domain_name.chat_api_alijamaluddin[0].domain_name
   stage       = aws_apigatewayv2_stage.chat_http.name
   api_mapping_key = ""
 }

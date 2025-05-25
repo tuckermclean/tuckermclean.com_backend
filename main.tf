@@ -26,11 +26,14 @@ resource "aws_acm_certificate" "website_cert" {
   domain_name       = var.domain_name[terraform.workspace]
   validation_method = "DNS"
 
-  subject_alternative_names = [
+  subject_alternative_names = concat([
     "www.${var.domain_name[terraform.workspace]}",
-    "api.${var.domain_name[terraform.workspace]}",
     "auth.${var.domain_name[terraform.workspace]}",
-  ]
+  ], terraform.workspace == "prod" ? [
+    "alijamaluddin.com",
+    "www.alijamaluddin.com",
+    "auth.alijamaluddin.com"
+  ] : [])
 
   lifecycle {
     create_before_destroy = true
@@ -47,9 +50,12 @@ resource "aws_acm_certificate" "api_cert" {
   domain_name       = "api.${var.domain_name[terraform.workspace]}"
   validation_method = "DNS"
 
-  subject_alternative_names = [
+  subject_alternative_names = concat([
     "api-ws.${var.domain_name[terraform.workspace]}",
-  ]
+  ], terraform.workspace == "prod" ? [
+    "api.alijamaluddin.com",
+    "api-ws.alijamaluddin.com"
+  ] : [])
 
   lifecycle {
     create_before_destroy = true

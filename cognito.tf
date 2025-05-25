@@ -83,11 +83,17 @@ resource "aws_cognito_user_pool_client" "pool" {
     aws_cognito_identity_provider.google.provider_name
   ]
 
-  callback_urls = [
-    # Where you want Cognito to redirect back after authentication
-    "https://${var.domain_name[terraform.workspace]}/callback.html", 
-  ]
-  logout_urls = [
+  callback_urls = concat([
+    "https://${var.domain_name[terraform.workspace]}/callback.html",
+  ], terraform.workspace == "prod" ? [
+    "https://alijamaluddin.com/callback.html",
+    "https://www.alijamaluddin.com/callback.html"
+  ] : [])
+
+  logout_urls = concat([
     "https://${var.domain_name[terraform.workspace]}/logout.html"
-  ]
+  ], terraform.workspace == "prod" ? [
+    "https://alijamaluddin.com/logout.html",
+    "https://www.alijamaluddin.com/logout.html"
+  ] : [])
 }

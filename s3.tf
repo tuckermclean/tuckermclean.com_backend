@@ -79,10 +79,13 @@ resource "aws_cloudfront_distribution" "cdn" {
     error_caching_min_ttl = 5
   }
 
-  aliases = [
+  aliases = concat([
     var.domain_name[terraform.workspace],
-    "www.${var.domain_name[terraform.workspace]}",
-  ]
+    "www.${var.domain_name[terraform.workspace]}"
+  ], terraform.workspace == "prod" ? [
+    "alijamaluddin.com",
+    "www.alijamaluddin.com"
+  ] : [])
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
