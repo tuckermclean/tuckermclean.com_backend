@@ -1,21 +1,81 @@
 # Fill it out with your own values and save it as variables.tf in the same folder as your main.tf file.
-#
-# variable google_client_id {
-#   type        = string
-#   default     = "" # Enter your own Google OAuth 2.0 client ID here
-#   description = "description"
-#   sensitive   = true
-# }
 
-# variable google_client_secret {
-#   type        = string
-#   default     = ""  # Enter your own Google OAuth 2.0 client secret here
-#   description = "description"
-#   sensitive   = true
-# }
+variable google_client_id {
+  default     = {
+    default = "" # Enter your own Google OAuth 2.0 client ID here
+    dev     = "" # Enter your own Google OAuth 2.0 client ID here
+    prod    = "" # Enter your own Google OAuth 2.0 client ID here
+  }
+  description = "Google OAuth 2.0 client ID for authentication"
+}
 
-# variable domain_name {
-#   type        = string
-#   default     = "technomantics.com"
-#   description = "description"
-# }
+variable google_client_secret {
+  default     = {
+    default = ""  # Enter your own Google OAuth 2.0 client secret here
+    dev     = ""  # Enter your own Google OAuth 2.0 client secret here
+    prod    = ""  # Enter your own Google OAuth 2.0 client secret here
+  }
+  description = "Google OAuth 2.0 client secret for authentication"
+  sensitive   = true
+}
+
+variable github_token {
+  default     = {
+    default = "" # Enter your GitHub personal access token here
+    dev     = "" # Enter your GitHub personal access token here
+    prod    = "" # Enter your GitHub personal access token here
+  }
+  description = "GitHub personal access token for repository access"
+  sensitive   = true
+}
+
+variable domain_name {
+  default     = {
+    default = "example.com"
+    dev     = "example.com"
+    prod    = "example.com"
+  }
+  description = "Domain name for the application"
+}
+
+variable sms_phone_number {
+  default     = {
+    default = ""  # Enter your phone number here (e.g., +1234567890)
+    dev     = ""  # Enter your phone number here (e.g., +1234567890)
+    prod    = ""  # Enter your phone number here (e.g., +1234567890)
+  }
+  description = "Phone number for SMS notifications"
+}
+
+variable notify_email {
+  default     = {
+    default = "notify@example.com"
+    dev     = "notify@example.com"
+    prod    = "notify@example.com"
+  }
+  description = "Email address for notifications"
+}
+
+variable "index_name" {
+  description = "OpenSearch index name"
+  type        = string
+  default     = "github-repos"
+}
+
+variable "github_repos" {
+  description = "List of GitHub repositories to process for the chatbot"
+  default     = {
+    default = [
+      "username/repo1",
+      "username/repo2"
+    ]
+    dev     = [
+      "username/repo1",
+      "username/repo2"
+    ]
+    prod    = [
+      "username/repo1",
+      "username/repo2"
+    ]
+  }
+}
